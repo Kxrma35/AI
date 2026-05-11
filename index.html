@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>JOESTAR</title>
+
+</head>
+<body>
+
+<div class="corner corner-tl"></div>
+<div class="corner corner-tr"></div>
+<div class="corner corner-bl"></div>
+<div class="corner corner-br"></div>
+
+<div class="shell">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="logo">JOESTAR</div>
+    </div>
+    <div class="status-row">
+      <span><span class="status-dot"></span>SYSTEMS ONLINE</span>
+      <span id="clock">--:--:--</span>
+      <span>CPU 34%</span>
+      <span>MEM 2.1GB</span>
+    </div>
+  </div>
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+    <div class="panel">
+      <div class="panel-title">System Status</div>
+      <div class="metric">
+        <span class="metric-label">Neural Core</span>
+        <span class="metric-value" style="color:#00ff88">ACTIVE</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="animation-duration:4s"></div></div>
+
+      <div class="metric" style="margin-top:10px">
+        <span class="metric-label">Memory</span>
+        <span class="metric-value">67%</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:67%;animation:none"></div></div>
+
+      <div class="metric" style="margin-top:10px">
+        <span class="metric-label">Tools Ready</span>
+        <span class="metric-value">5/5</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:100%;animation:none;background:var(--cyan)"></div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Today's Schedule</div>
+      <div class="schedule-item">
+        <div class="schedule-time">09:30</div>
+        <div class="schedule-title">Meridian Logistics</div>
+      </div>
+      <div class="schedule-item">
+        <div class="schedule-time">11:00</div>
+        <div class="schedule-title">Vertex Analytics</div>
+      </div>
+      <div class="schedule-item">
+        <div class="schedule-time">14:00</div>
+        <div class="schedule-title">Pinnacle Industries</div>
+      </div>
+      <div class="schedule-item">
+        <div class="schedule-time">16:00</div>
+        <div class="schedule-title">Dev Sprint Planning</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Weather</div>
+      <div style="font-size:28px;color:var(--text-bright);margin:4px 0">28°C</div>
+      <div style="font-size:11px;color:var(--cyan-dim)">Clear skies · Feels 30°C</div>
+      <div style="font-size:10px;color:var(--cyan-dim);margin-top:4px;font-family:'Share Tech Mono',monospace">Humidity 72%</div>
+    </div>
+  </div>
+
+  <!-- CENTER ORB -->
+  <div class="center">
+    <div class="orb-ring"></div>
+    <div class="orb-ring"></div>
+    <div class="orb-ring"></div>
+    <canvas id="orb-canvas" width="280" height="280"></canvas>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <div class="panel" style="flex:1;overflow:hidden">
+      <div class="panel-title">System Log</div>
+      <div id="log-container"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Active Tools</div>
+      <div class="metric"><span class="metric-label">Web Search</span><span class="metric-value" style="color:#00ff88">READY</span></div>
+      <div class="metric"><span class="metric-label">File System</span><span class="metric-value" style="color:#00ff88">READY</span></div>
+      <div class="metric"><span class="metric-label">Calendar</span><span class="metric-value" style="color:#00ff88">READY</span></div>
+      <div class="metric"><span class="metric-label">Weather API</span><span class="metric-value" style="color:#00ff88">READY</span></div>
+      <div class="metric"><span class="metric-label">Code Exec</span><span class="metric-value" style="color:#ffaa00">STANDBY</span></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM CHAT BAR -->
+  <div class="bottom">
+    <button class="mic-btn" id="mic-btn" title="Hold to speak">🎙</button>
+    <div class="input-wrap">
+      <input class="chat-input" id="chat-input" type="text" placeholder="Awaiting your command, Sir..." />
+    </div>
+    <div class="response-area" id="response-area">
+      <span id="response-text"></span>
+    </div>
+    <button class="send-btn" id="send-btn">Send</button>
+  </div>
+
+</div>
+
+
+</body>
+</html>
