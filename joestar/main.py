@@ -1,8 +1,14 @@
+from pathlib import Path
+from dotenv import load_dotenv
+
+FRONTEND_DIR = Path(__file__).parent
+load_dotenv(FRONTEND_DIR / ".env")
+
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from brain import Brain
-from voice import synthesize_speech
+from joestar.brain import Brain
+from joestar.voice import synthesize_speech
 import json
 
 app = FastAPI()
@@ -45,4 +51,4 @@ def health():
     return {"status": "online"}
 
 # Serve frontend
-app.mount("/", StaticFiles(directory=".", html=True), name="frontend")
+app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

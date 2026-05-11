@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+anthropic
+chromadb
+httpx
+python-dotenv
+icalendar
+pytz
