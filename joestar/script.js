@@ -172,17 +172,40 @@ chatInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') handleSend();
 });
 
+// ── SPEECH RECOGNITION ──
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+if (recognition) {
+  recognition.continuous = false;
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    chatInput.value = transcript;
+    handleSend();
+  };
+  recognition.onerror = (e) => addLog(`MIC: ${e.error}`, true);
+  recognition.onend = () => {
+    micBtn.classList.remove('active');
+    targetAmplitude = 0;
+    addLog('MIC: Input captured');
+  };
+}
+
 micBtn.addEventListener('click', () => {
-  micBtn.classList.toggle('active');
-  if (micBtn.classList.contains('active')) {
-    addLog('MIC: Listening...', true);
-    targetAmplitude = 0.25;
-    setTimeout(() => {
-      micBtn.classList.remove('active');
-      targetAmplitude = 0;
-      addLog('MIC: Input captured');
-    }, 2500);
+  if (!recognition) {
+    addLog('MIC: Speech API unavailable', true);
+    return;
   }
+  if (micBtn.classList.contains('active')) {
+    recognition.stop();
+    return;
+  }
+  micBtn.classList.add('active');
+  addLog('MIC: Listening...', true);
+  targetAmplitude = 0.25;
+  recognition.start();
 });
 
 // ── BOOT SEQUENCE ──
