@@ -45,4 +45,4 @@ def health():
     return {"status": "online"}
 
 # Serve frontend
-app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
+app.mount("/", StaticFiles(directory=".", html=True), name="frontend")
