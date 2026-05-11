@@ -100,7 +100,7 @@ class Brain:
         # Agentic loop
         while True:
             response = self.client.messages.create(
-                model="claude-opus-4-5",
+                model="claude-opus-4-7",
                 max_tokens=1024,
                 system=SYSTEM_PROMPT,
                 tools=TOOLS,
