@@ -121,32 +121,45 @@ async function typeResponse(text) {
   targetAmplitude = 0;
 }
 
-// ── DEMO RESPONSES (replace with WebSocket later) ──
-const RESPONSES = [
-  "Good morning, Sir. You have four engagements today, beginning with Meridian Logistics at 0930 hours. Shall I prepare a briefing?",
-  "Weather analysis complete. 28°C, clear skies, humidity at 72%. Optimal conditions for outdoor activity, Sir.",
-  "Meridian Logistics — 42 staff, ongoing engagement for six weeks. I've identified three structural bottlenecks. Recommend flattening to two management tiers.",
-  "Running diagnostics. All systems nominal. Neural core at peak efficiency. Memory allocation stable at 67 percent.",
-  "Of course, Sir. I've located the relevant files and summarized the key points. Shall I send them to your display?",
-];
+// ── WEBSOCKET ──
+const ws = new WebSocket(`ws://${location.host}/ws`);
+const audioEl = new Audio();
+let pendingReply = null;
 
-let responseIdx = 0;
+ws.addEventListener('open', () => addLog('LINK: WebSocket established', true));
+ws.addEventListener('close', () => addLog('LINK: WebSocket closed'));
+ws.addEventListener('error', () => addLog('LINK: WebSocket error', true));
+
+ws.addEventListener('message', async (event) => {
+  const msg = JSON.parse(event.data);
+
+  if (msg.type === 'text') {
+    addLog('JOESTAR: Response received', true);
+    pendingReply = typeResponse(msg.content);
+  }
+
+  if (msg.type === 'audio') {
+    const bin = atob(msg.content);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'audio/mpeg' });
+    audioEl.src = URL.createObjectURL(blob);
+    audioEl.play().catch(err => addLog(`AUDIO: ${err.message}`));
+  }
+});
 
 async function handleSend() {
   const query = chatInput.value.trim();
   if (!query) return;
+  if (ws.readyState !== WebSocket.OPEN) {
+    addLog('LINK: Not connected', true);
+    return;
+  }
 
   addLog(`USER: ${query}`);
   chatInput.value = '';
-
-  await new Promise(r => setTimeout(r, 300));
-
-  const reply = RESPONSES[responseIdx % RESPONSES.length];
-  responseIdx++;
-
   addLog('JOESTAR: Processing...', true);
-  await typeResponse(reply);
-  addLog(`JOESTAR: Response delivered`, true);
+  ws.send(JSON.stringify({ text: query }));
 }
 
 // ── EVENT LISTENERS ──
@@ -179,7 +192,4 @@ addLog('Memory systems loaded — 847 entries');
 addLog('Tools loaded: weather, calendar, files, search');
 addLog('Awaiting user input...');
 
-setTimeout(async () => {
-  await typeResponse(RESPONSES[0]);
-  addLog('JOESTAR: Morning briefing delivered', true);
-}, 1200);
+addLog('Awaiting user input...');
