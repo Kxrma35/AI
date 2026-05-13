@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
 // ── WEBSOCKET ──
-const ws = new WebSocket("ws://localhost:8000/ws");
+const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
 
 ws.onopen = () => addLog('JOESTAR ONLINE — Connected to backend', true);
 

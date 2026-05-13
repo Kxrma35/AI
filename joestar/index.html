@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>JOESTAR</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <script type="importmap">
     {
       "imports": {
@@ -111,17 +112,21 @@
 
   <!-- BOTTOM CHAT BAR -->
   <div class="bottom">
-    <button class="mic-btn" id="mic-btn" title="Hold to speak">🎙</button>
-    <button class="search-btn" id="search-btn" title="Web search (Ctrl+K)">🔍</button>
+  <div class="bottom-controls">
+    <button class="mic-btn" id="mic-btn" title="Hold to speak">
+      <i class="fa-solid fa-microphone"></i>
+    </button>
+    <button class="search-btn" id="search-btn" title="Web search (Ctrl+K)">
+      <i class="fa-solid fa-magnifying-glass"></i>
+    </button>
     <div class="input-wrap">
       <input class="chat-input" id="chat-input" type="text" placeholder="Awaiting your command, Sir..." />
     </div>
-    <div class="response-area" id="response-area">
-      <span id="response-text"></span>
-    </div>
     <button class="send-btn" id="send-btn">Send</button>
   </div>
-
+  <div class="response-area" id="response-area">
+    <span id="response-text"></span>
+  </div>
 </div>
 
 
