@@ -1,9 +1,9 @@
 import anthropic
-from joestar.memory import Memory
-from joestar.tools.weather import get_weather
-from joestar.tools.calendar import get_schedule
-from joestar.tools.files import read_file, write_file
-from joestar.tools.web_search import search_web
+from memory import Memory
+from tools.weather import get_weather
+from tools.calendar import get_schedule
+from tools.files import read_file, write_file
+from tools.web_search import search_web
 import json
 
 SYSTEM_PROMPT = """

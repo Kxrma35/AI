@@ -7,9 +7,10 @@ load_dotenv(FRONTEND_DIR / ".env")
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from joestar.brain import Brain
-from joestar.voice import synthesize_speech
+from brain import Brain
+from tools.web_search import search_web
 import json
+import asyncio
 
 app = FastAPI()
 
@@ -30,21 +31,27 @@ async def websocket_endpoint(websocket: WebSocket):
         message = json.loads(data)
         user_input = message.get("text", "")
 
-        # Stream response from brain
-        response = await brain.think(user_input)
+        try:
+            response = await brain.think(user_input)
+        except Exception as e:
+            response = f"Brain error: {e}"
 
-        # Send text back
         await websocket.send_text(json.dumps({
             "type": "text",
             "content": response
         }))
 
-        # Synthesize and send audio
-        audio_b64 = await synthesize_speech(response)
-        await websocket.send_text(json.dumps({
-            "type": "audio",
-            "content": audio_b64
-        }))
+@app.post("/search")
+async def search_endpoint(query: dict):
+    search_query = query.get("query", "")
+    if not search_query:
+        return {"error": "No query provided"}
+    try:
+        loop = asyncio.get_event_loop()
+        results = await loop.run_in_executor(None, search_web, search_query)
+        return {"query": search_query, "results": results}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/health")
 def health():
@@ -52,3 +59,7 @@ def health():
 
 # Serve frontend
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
