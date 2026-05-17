@@ -8,6 +8,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from brain import Brain
+from voice import synthesize_speech
 from tools.web_search import search_web
 import json
 import asyncio
@@ -36,10 +37,21 @@ async def websocket_endpoint(websocket: WebSocket):
         except Exception as e:
             response = f"Brain error: {e}"
 
+        # Send text immediately so UI updates fast
         await websocket.send_text(json.dumps({
             "type": "text",
             "content": response
         }))
+
+        # Then synthesize and send audio
+        try:
+            audio_b64 = await synthesize_speech(response)
+            await websocket.send_text(json.dumps({
+                "type": "audio",
+                "content": audio_b64
+            }))
+        except Exception as e:
+            print(f"[Voice] TTS error: {e}")
 
 @app.post("/search")
 async def search_endpoint(query: dict):
