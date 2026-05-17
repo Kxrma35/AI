@@ -1,76 +1,97 @@
-import anthropic
+import json
+import re
+from groq import Groq
 from memory import Memory
 from tools.weather import get_weather
 from tools.calendar import get_schedule
 from tools.files import read_file, write_file
 from tools.web_search import search_web
-import json
 
 SYSTEM_PROMPT = """
 You are JOESTAR — a highly capable, proactive personal AI assistant.
 You speak with precision, confidence, and sharp wit.
 You address the user as "Sir" or by name.
 You don't just answer — you analyze, anticipate, and advise.
-When you need information, use your tools. Always.
 Keep responses concise but substantive.
+
+CRITICAL RULES:
+- Never write function calls as text in your response.
+- Never use XML tags like <function=...> in your response.
+- Only use tools through the official tools API.
+- For simple greetings or conversation, just respond normally without calling any tools.
 """
 
 TOOLS = [
     {
-        "name": "get_weather",
-        "description": "Get current weather and forecast for a location.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "location": {"type": "string", "description": "City name"}
-            },
-            "required": ["location"]
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get current weather and forecast for a location.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string", "description": "City name"}
+                },
+                "required": ["location"]
+            }
         }
     },
     {
-        "name": "get_schedule",
-        "description": "Get today's calendar events and upcoming meetings.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "date": {"type": "string", "description": "Date in YYYY-MM-DD format"}
-            },
-            "required": ["date"]
+        "type": "function",
+        "function": {
+            "name": "get_schedule",
+            "description": "Get today's calendar events and upcoming meetings.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {"type": "string", "description": "Date in YYYY-MM-DD format"}
+                },
+                "required": ["date"]
+            }
         }
     },
     {
-        "name": "read_file",
-        "description": "Read contents of a local file.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "File path"}
-            },
-            "required": ["path"]
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read contents of a local file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File path"}
+                },
+                "required": ["path"]
+            }
         }
     },
     {
-        "name": "write_file",
-        "description": "Write or append content to a local file.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string"},
-                "content": {"type": "string"},
-                "mode": {"type": "string", "enum": ["write", "append"]}
-            },
-            "required": ["path", "content"]
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Write or append content to a local file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"},
+                    "mode": {"type": "string", "enum": ["write", "append"]}
+                },
+                "required": ["path", "content"]
+            }
         }
     },
     {
-        "name": "search_web",
-        "description": "Search the web for current information.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string"}
-            },
-            "required": ["query"]
+        "type": "function",
+        "function": {
+            "name": "search_web",
+            "description": "Search the web for current information.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"}
+                },
+                "required": ["query"]
+            }
         }
     }
 ]
@@ -83,52 +104,88 @@ TOOL_MAP = {
     "search_web": search_web,
 }
 
+GREETINGS = {"hey", "hi", "hello", "yo", "sup", "good morning", "good evening", "good afternoon", "morning", "evening"}
+
+
+def clean_response(text: str) -> str:
+    """Strip any leaked tool call syntax from model output."""
+    text = re.sub(r'<function=[^>]*>.*?</function>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<function=[^>]*>', '', text)
+    text = re.sub(r'</function>', '', text)
+    return text.strip()
+
+
 class Brain:
     def __init__(self):
-        self.client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
+        self.client = Groq()
         self.memory = Memory()
 
     async def think(self, user_input: str) -> str:
-        # Load relevant memory into context
+        # Skip tool calling for simple greetings
+        is_greeting = user_input.lower().strip() in GREETINGS
+        use_tools = not is_greeting
+
         context = self.memory.retrieve(user_input)
 
         messages = [
-            *context,  # inject relevant memories
+            {"role": "system", "content": SYSTEM_PROMPT},
+            *context,
             {"role": "user", "content": user_input}
         ]
 
-        # Agentic loop
         while True:
-            response = self.client.messages.create(
-                model="claude-opus-4-7",
+            kwargs = dict(
+                model="llama-3.3-70b-versatile",
                 max_tokens=1024,
-                system=SYSTEM_PROMPT,
-                tools=TOOLS,
-                messages=messages
+                messages=messages,
             )
 
-            # If model wants to use a tool
-            if response.stop_reason == "tool_use":
-                tool_results = []
-                for block in response.content:
-                    if block.type == "tool_use":
-                        fn = TOOL_MAP.get(block.name)
-                        result = fn(**block.input) if fn else "Tool not found"
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": str(result)
-                        })
+            if use_tools:
+                kwargs["tools"] = TOOLS
+                kwargs["tool_choice"] = "auto"
+                kwargs["parallel_tool_calls"] = False
 
-                # Add assistant response and tool results to messages
-                messages.append({"role": "assistant", "content": response.content})
-                messages.append({"role": "user", "content": tool_results})
-                continue  # loop again
+            response = self.client.chat.completions.create(**kwargs)
+            message = response.choices[0].message
 
-            # Final text response
-            final = next(b.text for b in response.content if hasattr(b, "text"))
+            if use_tools and message.tool_calls:
+                messages.append({
+                    "role": "assistant",
+                    "content": message.content or "",
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments
+                            }
+                        }
+                        for tc in message.tool_calls
+                    ]
+                })
 
-            # Save to memory
+                for tc in message.tool_calls:
+                    fn = TOOL_MAP.get(tc.function.name)
+                    try:
+                        args = json.loads(tc.function.arguments)
+                        result = fn(**args) if fn else "Tool not found"
+                    except Exception as e:
+                        result = f"Tool error: {e}"
+
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": json.dumps(result) if not isinstance(result, str) else result
+                    })
+
+                continue
+
+            final = message.content or "No response generated."
+            final = clean_response(final)
+
+            if not final:
+                final = "Standing by, Sir."
+
             self.memory.save(user_input, final)
-
             return final
