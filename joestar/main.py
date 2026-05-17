@@ -69,9 +69,18 @@ async def search_endpoint(query: dict):
 def health():
     return {"status": "online"}
 
+@app.get("/test-voice")
+async def test_voice():
+    try:
+        audio_b64 = await synthesize_speech("Online and ready, Sir.")
+        return {"status": "ok", "audio_length": len(audio_b64)}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
 # Serve frontend
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
