@@ -16,9 +16,10 @@ ws.onmessage = (event) => {
   if (msg.type === "text") {
     typeResponse(msg.content);
     addLog('JOESTAR: Response received', true);
+    updateMobileLog('JOESTAR responded');
   } else if (msg.type === "audio") {
     playAudio(msg.content);
-    addLog(' Audio synthesized', true);
+    addLog('Audio synthesized', true);
   }
 };
 
@@ -30,6 +31,7 @@ function sendMessage(text) {
     return;
   }
   addLog(`YOU: ${text}`);
+  updateMobileLog(`YOU: ${text}`);
   document.getElementById('response-text').textContent = 'Processing...';
   ws.send(JSON.stringify({ text }));
 }
@@ -42,11 +44,31 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
+// ── MOBILE LOG ──
+function updateMobileLog(text) {
+  const el = document.getElementById('mobile-log');
+  if (el) el.textContent = text;
+}
+
 // ── THREE.JS ORB ──
 const canvas = document.getElementById('orb-canvas');
+
+// Responsive orb size
+function getOrbSize() {
+  return window.innerWidth <= 768 ? 180 : 280;
+}
+
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(280, 280);
+
+function resizeRenderer() {
+  const size = getOrbSize();
+  renderer.setSize(size, size);
+  canvas.style.width = size + 'px';
+  canvas.style.height = size + 'px';
+}
+resizeRenderer();
+window.addEventListener('resize', resizeRenderer);
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
@@ -118,15 +140,15 @@ const responseText = document.getElementById('response-text');
 let typingAborted = false;
 
 async function typeResponse(text) {
-  typingAborted = true;                    
-  await new Promise(r => setTimeout(r, 0)); 
+  typingAborted = true;
+  await new Promise(r => setTimeout(r, 0));
   typingAborted = false;
 
   responseText.textContent = '';
   targetAmplitude = 0.6;
 
   for (let i = 0; i < text.length; i++) {
-    if (typingAborted) return;             // bail if a new response came in
+    if (typingAborted) return;
     responseText.textContent += text[i];
     await new Promise(r => setTimeout(r, 14 + Math.random() * 10));
     targetAmplitude = 0.4 + Math.random() * 0.4;
@@ -147,6 +169,7 @@ if (SpeechRecognition) {
   recognition.onstart = () => {
     micBtn.classList.add('active');
     addLog('MIC: Listening...', true);
+    updateMobileLog('Listening...');
     targetAmplitude = 0.2;
   };
 
@@ -196,9 +219,9 @@ chatInput.addEventListener('keydown', e => {
 // Web search button + Ctrl+K shortcut
 async function doWebSearch(query) {
   if (!query.trim()) return;
-  addLog(`🔎 Searching: "${query}"`, true);
+  addLog(`Searching: "${query}"`, true);
   document.getElementById('response-text').textContent = 'Searching the web...';
-  
+
   try {
     const res = await fetch('/search', {
       method: 'POST',
@@ -210,8 +233,7 @@ async function doWebSearch(query) {
       addLog(`Search error: ${data.error}`);
       return;
     }
-    typeResponse(`Found ${data.results.length || 0} results for "${query}". Sending to Claude for analysis...`);
-    // Now send to brain for AI analysis
+    typeResponse(`Found ${data.results.length || 0} results for "${query}". Sending to JOESTAR for analysis...`);
     sendMessage(`Search results for "${query}": ${JSON.stringify(data.results).slice(0, 500)}...`);
   } catch (e) {
     addLog(`Search failed: ${e.message}`);
@@ -226,7 +248,6 @@ searchBtn.addEventListener('click', () => {
   }
 });
 
-// Ctrl+K for search
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
     e.preventDefault();
@@ -254,7 +275,6 @@ function playAudio(base64Audio) {
       source.start(0);
     });
   } catch (e) {
-    // Fallback: use Audio element
     try {
       const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
       audio.play().catch(() => addLog('Audio playback error'));
@@ -264,11 +284,10 @@ function playAudio(base64Audio) {
   }
 }
 
-// Toggle audio with keyboard shortcut (Alt+M)
 document.addEventListener('keydown', (e) => {
   if (e.altKey && e.key.toLowerCase() === 'm') {
     audioEnabled = !audioEnabled;
-    addLog(`🔊 Audio ${audioEnabled ? 'ON' : 'OFF'}`, true);
+    addLog(`Audio ${audioEnabled ? 'ON' : 'OFF'}`, true);
   }
 });
 
@@ -278,3 +297,4 @@ addLog('Memory systems loading...');
 addLog('Tools ready: web search, files, calendar, voice');
 addLog('Voice output active — Press Alt+M to toggle sound');
 addLog('Awaiting your command, Sir...');
+updateMobileLog('SYSTEMS ONLINE — AWAITING COMMAND');

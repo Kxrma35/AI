@@ -38,6 +38,7 @@ body::before {
   z-index: 100;
 }
 
+/* ── DESKTOP LAYOUT ── */
 .shell {
   display: grid;
   grid-template-columns: 210px 1fr 210px;
@@ -227,14 +228,8 @@ body::before {
   min-height: 0;
 }
 
-.right-panel .panel {
-  flex-shrink: 1;
-}
-
-.right-panel .panel:first-child {
-  flex: 1;
-  overflow: hidden;
-}
+.right-panel .panel { flex-shrink: 1; }
+.right-panel .panel:first-child { flex: 1; overflow: hidden; }
 
 #log-container {
   overflow: hidden;
@@ -296,9 +291,7 @@ body::before {
   box-shadow: 0 0 24px rgba(0,212,255,0.5);
 }
 
-.mic-btn.active {
-  animation: micPulse 1s ease-in-out infinite;
-}
+.mic-btn.active { animation: micPulse 1s ease-in-out infinite; }
 
 @keyframes micPulse {
   0%, 100% { box-shadow: 0 0 24px rgba(0,212,255,0.5); }
@@ -326,10 +319,7 @@ body::before {
   box-shadow: 0 0 24px rgba(0,212,255,0.5);
 }
 
-.input-wrap {
-  flex: 1;
-  position: relative;
-}
+.input-wrap { flex: 1; position: relative; }
 
 .chat-input {
   width: 100%;
@@ -397,3 +387,106 @@ body::before {
 .corner-tr { top: 8px; right: 8px; border-top: 2px solid var(--cyan); border-right: 2px solid var(--cyan); }
 .corner-bl { bottom: 8px; left: 8px; border-bottom: 2px solid var(--cyan); border-left: 2px solid var(--cyan); }
 .corner-br { bottom: 8px; right: 8px; border-bottom: 2px solid var(--cyan); border-right: 2px solid var(--cyan); }
+
+
+/* ══════════════════════════════════════
+   MOBILE STYLES (max-width: 768px)
+   ══════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  html, body {
+    overflow: hidden;
+    height: 100%;
+    height: 100dvh;
+  }
+
+  .corner { display: none; }
+
+  .shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    padding: 6px;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* TOP BAR — compact */
+  .topbar {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    margin-bottom: 4px;
+  }
+
+  .logo { font-size: 11px; letter-spacing: 4px; }
+
+  .status-row {
+    gap: 8px;
+    font-size: 8px;
+  }
+
+  /* Hide side panels on mobile */
+  .left-panel, .right-panel { display: none; }
+
+  /* CENTER — orb takes available space */
+  .center {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #orb-canvas {
+    width: 180px !important;
+    height: 180px !important;
+  }
+
+  .orb-ring:nth-child(1) { width: 200px; height: 200px; }
+  .orb-ring:nth-child(2) { width: 230px; height: 230px; }
+  .orb-ring:nth-child(3) { width: 260px; height: 260px; }
+
+  /* BOTTOM — full width, taller response area */
+  .bottom {
+    flex-shrink: 0;
+    padding: 6px 0 8px;
+    gap: 6px;
+  }
+
+  .bottom-controls { gap: 6px; }
+
+  .mic-btn, .search-btn {
+    width: 42px;
+    height: 42px;
+    font-size: 16px;
+  }
+
+  .chat-input {
+    font-size: 14px;
+    padding: 10px 12px;
+  }
+
+  .send-btn {
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+
+  .response-area {
+    min-height: 48px;
+    max-height: 80px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* Show a minimal log strip on mobile */
+  .mobile-log {
+    display: block !important;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 8px;
+    color: var(--cyan-dim);
+    text-align: center;
+    padding: 2px 0;
+    flex-shrink: 0;
+  }
+}
+
+/* Mobile log hidden on desktop */
+.mobile-log { display: none; }
