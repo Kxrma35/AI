@@ -24,6 +24,16 @@ app.add_middleware(
 
 brain = Brain()
 
+
+def should_speak(text: str) -> bool:
+    """Skip TTS for long responses or anything containing code."""
+    if len(text) > 600:
+        return False
+    if "```" in text:
+        return False
+    return True
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -43,15 +53,17 @@ async def websocket_endpoint(websocket: WebSocket):
             "content": response
         }))
 
-        # Then synthesize and send audio
-        try:
-            audio_b64 = await synthesize_speech(response)
-            await websocket.send_text(json.dumps({
-                "type": "audio",
-                "content": audio_b64
-            }))
-        except Exception as e:
-            print(f"[Voice] TTS error: {e}")
+        # Only speak short, non-code responses
+        if should_speak(response):
+            try:
+                audio_b64 = await synthesize_speech(response)
+                await websocket.send_text(json.dumps({
+                    "type": "audio",
+                    "content": audio_b64
+                }))
+            except Exception as e:
+                print(f"[Voice] TTS error: {e}")
+
 
 @app.post("/search")
 async def search_endpoint(query: dict):
@@ -65,9 +77,11 @@ async def search_endpoint(query: dict):
     except Exception as e:
         return {"error": str(e)}
 
+
 @app.get("/health")
 def health():
     return {"status": "online"}
+
 
 @app.get("/test-voice")
 async def test_voice():
@@ -77,10 +91,10 @@ async def test_voice():
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
-# Serve frontend
+
+# Serve frontend — must be last
 app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-

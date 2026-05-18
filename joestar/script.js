@@ -115,11 +115,18 @@ function addLog(text, highlight = false) {
 
 // ── TYPEWRITER ──
 const responseText = document.getElementById('response-text');
+let typingAborted = false;
 
 async function typeResponse(text) {
+  typingAborted = true;                    
+  await new Promise(r => setTimeout(r, 0)); 
+  typingAborted = false;
+
   responseText.textContent = '';
   targetAmplitude = 0.6;
+
   for (let i = 0; i < text.length; i++) {
+    if (typingAborted) return;             // bail if a new response came in
     responseText.textContent += text[i];
     await new Promise(r => setTimeout(r, 14 + Math.random() * 10));
     targetAmplitude = 0.4 + Math.random() * 0.4;

@@ -1,30 +1,17 @@
-import httpx
+import edge_tts
 import base64
-import os
+import io
+import asyncio
 
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-
-VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "onwK4e9ZLuTAKqWW03F9")
+VOICE = "en-GB-RyanNeural"
 
 async def synthesize_speech(text: str) -> str:
-    """Returns base64-encoded MP3 audio."""
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}",
-            headers={
-                "xi-api-key": ELEVENLABS_API_KEY,
-                "Content-Type": "application/json"
-            },
-            json={
-                "text": text,
-                "model_id": "eleven_turbo_v2",
-                "voice_settings": {
-                    "stability": 0.5,
-                    "similarity_boost": 0.75
-                }
-            },
-            timeout=30.0
-        )
-        print(f"[Voice] Status: {response.status_code}")
-        audio_bytes = response.content
-        return base64.b64encode(audio_bytes).decode("utf-8")
+    """Returns base64-encoded MP3 audio using Edge TTS."""
+    communicate = edge_tts.Communicate(text, VOICE)
+    
+    audio_bytes = b""
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio_bytes += chunk["data"]
+    
+    return base64.b64encode(audio_bytes).decode("utf-8")

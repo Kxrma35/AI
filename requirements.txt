@@ -7,4 +7,4 @@ python-dotenv
 icalendar
 pytz
 groq
-
+edge-tts
