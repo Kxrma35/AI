@@ -1,15 +1,20 @@
 import sqlite3
 import chromadb
 from datetime import datetime
+from pathlib import Path
+
+# Ensure data directory exists
+DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR.mkdir(exist_ok=True)
 
 class Memory:
     def __init__(self):
         # Short-term: SQLite
-        self.conn = sqlite3.connect("data/joestar.db", check_same_thread=False)
+        self.conn = sqlite3.connect(str(DATA_DIR / "joestar.db"), check_same_thread=False)
         self._init_db()
 
         # Long-term: ChromaDB vector store
-        self.chroma = chromadb.PersistentClient(path="data/chroma")
+        self.chroma = chromadb.PersistentClient(path=str(DATA_DIR / "chroma"))
         self.collection = self.chroma.get_or_create_collection("joestar_memory")
 
     def _init_db(self):
@@ -37,7 +42,7 @@ class Memory:
             ids=[f"mem_{datetime.now().timestamp()}"]
         )
 
-    def retrieve(self, query: str, n=5) -> list:
+    def retrieve(self, query: str, n=3) -> list:
         """Retrieve semantically relevant past memories."""
         try:
             results = self.collection.query(
@@ -48,7 +53,6 @@ class Memory:
             if not docs:
                 return []
 
-            # Format as context message
             memory_text = "\n---\n".join(docs)
             return [{
                 "role": "user",
