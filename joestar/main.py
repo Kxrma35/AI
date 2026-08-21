@@ -5,6 +5,7 @@ FRONTEND_DIR = Path(__file__).parent
 load_dotenv(FRONTEND_DIR / ".env")
 
 from fastapi import FastAPI, WebSocket
+from starlette.websockets import WebSocketDisconnect, WebSocketState
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from brain import Brain
@@ -24,6 +25,8 @@ app.add_middleware(
 
 brain = Brain()
 
+PROACTIVE_INTERVAL_SECONDS = 900
+
 
 def should_speak(text: str) -> bool:
     """Skip TTS for long responses or anything containing code."""
@@ -34,35 +37,65 @@ def should_speak(text: str) -> bool:
     return True
 
 
+async def send_response(websocket: WebSocket, text: str, proactive: bool = False):
+    payload = {"type": "text", "content": text}
+    if proactive:
+        payload["proactive"] = True
+    # Send text immediately so UI updates fast
+    await websocket.send_text(json.dumps(payload))
+
+    if should_speak(text):
+        try:
+            audio_b64 = await synthesize_speech(text)
+            await websocket.send_text(json.dumps({
+                "type": "audio",
+                "content": audio_b64
+            }))
+        except Exception as e:
+            print(f"[Voice] TTS error: {e}")
+
+
+async def proactive_loop(websocket: WebSocket):
+    """Periodically check whether JOESTAR should speak up unprompted."""
+    while True:
+        await asyncio.sleep(PROACTIVE_INTERVAL_SECONDS)
+        try:
+            message = await brain.proactive_check()
+            if message:
+                await send_response(websocket, message, proactive=True)
+        except Exception as e:
+            print(f"[Proactive] error: {e}")
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    while True:
-        data = await websocket.receive_text()
-        message = json.loads(data)
-        user_input = message.get("text", "")
 
-        try:
-            response = await brain.think(user_input)
-        except Exception as e:
-            response = f"Brain error: {e}"
+    try:
+        briefing = await brain.proactive_check()
+        if briefing:
+            await send_response(websocket, briefing, proactive=True)
+    except Exception as e:
+        print(f"[Proactive] briefing error: {e}")
 
-        # Send text immediately so UI updates fast
-        await websocket.send_text(json.dumps({
-            "type": "text",
-            "content": response
-        }))
+    bg_task = asyncio.create_task(proactive_loop(websocket))
 
-        # Only speak short, non-code responses
-        if should_speak(response):
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            user_input = message.get("text", "")
+
             try:
-                audio_b64 = await synthesize_speech(response)
-                await websocket.send_text(json.dumps({
-                    "type": "audio",
-                    "content": audio_b64
-                }))
+                response = await brain.think(user_input)
             except Exception as e:
-                print(f"[Voice] TTS error: {e}")
+                response = f"Brain error: {e}"
+
+            await send_response(websocket, response)
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        bg_task.cancel()
 
 
 @app.post("/search")

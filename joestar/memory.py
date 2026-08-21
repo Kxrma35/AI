@@ -42,6 +42,14 @@ class Memory:
             ids=[f"mem_{datetime.now().timestamp()}"]
         )
 
+    def get_recent(self, n=5) -> list:
+        """Get the n most recent exchanges, oldest first."""
+        cur = self.conn.execute(
+            "SELECT user_input, assistant_response FROM conversations ORDER BY id DESC LIMIT ?",
+            (n,)
+        )
+        return list(reversed(cur.fetchall()))
+
     def retrieve(self, query: str, n=3) -> list:
         """Retrieve semantically relevant past memories."""
         try:

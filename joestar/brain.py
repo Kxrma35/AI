@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import date, datetime
 from groq import Groq
 from memory import Memory
 from tools.weather import get_weather
@@ -135,6 +136,15 @@ GREETINGS = {"hey", "hi", "hello", "yo", "sup", "good morning", "good evening", 
 
 MAX_TOOL_ITERATIONS = 8
 
+PROACTIVE_PROMPT = """You are JOESTAR, briefly reviewing your own state in the background — the user has not spoken to you right now.
+
+Look at today's schedule and the recent conversation below. Decide if there's something worth proactively telling the user right now:
+- A calendar event starting within the next 30 minutes
+- A task, plan, or question from the recent conversation that seems worth checking in on
+
+Be conservative — most checks should find nothing worth mentioning. If there's nothing worth surfacing, respond with exactly: NOTHING
+Otherwise, write ONE short, natural message addressed to the user, at most 2 sentences, in your usual voice."""
+
 
 def clean_response(text: str) -> str:
     """Strip any leaked tool call syntax from model output."""
@@ -222,3 +232,30 @@ class Brain:
         final = "I hit my tool-call limit for this request, Sir — it needed more steps than I'm allowed to take at once. Want me to continue?"
         self.memory.save(user_input, final)
         return final
+
+    async def proactive_check(self) -> str | None:
+        """Decide, without user input, whether there's something worth surfacing unprompted."""
+        try:
+            schedule = get_schedule(date.today().strftime("%Y-%m-%d"))
+        except Exception:
+            schedule = []
+
+        recent = self.memory.get_recent(5)
+        recent_text = "\n".join(f"User: {u}\nJOESTAR: {a}" for u, a in recent) or "No recent conversation."
+
+        prompt = (
+            f"{PROACTIVE_PROMPT}\n\n"
+            f"Current time: {datetime.now().strftime('%H:%M')}\n"
+            f"Today's schedule: {json.dumps(schedule)}\n\n"
+            f"Recent conversation:\n{recent_text}"
+        )
+
+        response = self.client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = (response.choices[0].message.content or "").strip()
+        if not text or text.upper().startswith("NOTHING"):
+            return None
+        return clean_response(text)
