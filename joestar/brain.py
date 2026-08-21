@@ -241,7 +241,9 @@ class Brain:
             schedule = []
 
         recent = self.memory.get_recent(5)
-        recent_text = "\n".join(f"User: {u}\nJOESTAR: {a}" for u, a in recent) or "No recent conversation."
+        recent_text = "\n".join(
+            f"User: {u[:200]}\nJOESTAR: {a[:200]}" for u, a in recent
+        ) or "No recent conversation."
 
         prompt = (
             f"{PROACTIVE_PROMPT}\n\n"
@@ -252,7 +254,8 @@ class Brain:
 
         response = self.client.chat.completions.create(
             model="openai/gpt-oss-120b",
-            max_tokens=200,
+            max_tokens=300,
+            reasoning_effort="low",
             messages=[{"role": "user", "content": prompt}],
         )
         text = (response.choices[0].message.content or "").strip()

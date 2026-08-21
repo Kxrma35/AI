@@ -435,14 +435,13 @@ body::before {
     overflow: hidden;
   }
 
-  #orb-canvas {
-    width: 180px !important;
-    height: 180px !important;
-  }
+  /* Canvas size is set by script.js (getOrbSize), which already scales
+     with viewport — no CSS override here so JS stays the single source
+     of truth and the render resolution always matches the display size. */
 
-  .orb-ring:nth-child(1) { width: 200px; height: 200px; }
-  .orb-ring:nth-child(2) { width: 230px; height: 230px; }
-  .orb-ring:nth-child(3) { width: 260px; height: 260px; }
+  .orb-ring:nth-child(1) { width: clamp(190px, 62vmin, 420px); height: clamp(190px, 62vmin, 420px); }
+  .orb-ring:nth-child(2) { width: clamp(220px, 72vmin, 480px); height: clamp(220px, 72vmin, 480px); }
+  .orb-ring:nth-child(3) { width: clamp(250px, 82vmin, 540px); height: clamp(250px, 82vmin, 540px); }
 
   /* BOTTOM — full width, taller response area */
   .bottom {

@@ -53,9 +53,12 @@ function updateMobileLog(text) {
 // ── THREE.JS ORB ──
 const canvas = document.getElementById('orb-canvas');
 
-// Responsive orb size
+// Responsive orb size — scales with the smaller viewport dimension on mobile
+// instead of a flat 180px, so it fills the space a tall phone screen actually has.
 function getOrbSize() {
-  return window.innerWidth <= 768 ? 180 : 280;
+  if (window.innerWidth > 768) return 280;
+  const smallest = Math.min(window.innerWidth, window.innerHeight);
+  return Math.round(Math.min(Math.max(smallest * 0.6, 170), 320));
 }
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
