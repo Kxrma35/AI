@@ -6,6 +6,7 @@ from tools.weather import get_weather
 from tools.calendar import get_schedule
 from tools.files import read_file, write_file
 from tools.web_search import search_web
+from tools.shell import run_shell
 
 SYSTEM_PROMPT = """
 You are JOESTAR — a highly capable, proactive personal AI assistant and expert engineer.
@@ -103,6 +104,21 @@ TOOLS = [
                 "required": ["query"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_shell",
+            "description": "Run a shell command on the local machine and return its output. Use for system tasks, running scripts, checking system state, or automating anything a terminal can do.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "The shell command to execute"},
+                    "timeout": {"type": "integer", "description": "Max seconds to allow the command to run (default 30)"}
+                },
+                "required": ["command"]
+            }
+        }
     }
 ]
 
@@ -112,6 +128,7 @@ TOOL_MAP = {
     "read_file": read_file,
     "write_file": write_file,
     "search_web": search_web,
+    "run_shell": run_shell,
 }
 
 GREETINGS = {"hey", "hi", "hello", "yo", "sup", "good morning", "good evening", "good afternoon", "morning", "evening"}
