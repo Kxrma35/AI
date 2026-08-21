@@ -1,6 +1,6 @@
 import subprocess
 
-MAX_OUTPUT_CHARS = 8000
+MAX_OUTPUT_CHARS = 2000
 
 def run_shell(command: str, timeout: int = 30) -> dict:
     try:

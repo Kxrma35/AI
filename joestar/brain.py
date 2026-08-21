@@ -133,6 +133,8 @@ TOOL_MAP = {
 
 GREETINGS = {"hey", "hi", "hello", "yo", "sup", "good morning", "good evening", "good afternoon", "morning", "evening"}
 
+MAX_TOOL_ITERATIONS = 8
+
 
 def clean_response(text: str) -> str:
     """Strip any leaked tool call syntax from model output."""
@@ -160,7 +162,7 @@ class Brain:
             {"role": "user", "content": user_input}
         ]
 
-        while True:
+        for iteration in range(MAX_TOOL_ITERATIONS):
             kwargs = dict(
                 model="openai/gpt-oss-120b",
                 max_tokens=4096,
@@ -170,7 +172,7 @@ class Brain:
             if use_tools:
                 kwargs["tools"] = TOOLS
                 kwargs["tool_choice"] = "auto"
-                kwargs["parallel_tool_calls"] = False
+                kwargs["parallel_tool_calls"] = True
 
             response = self.client.chat.completions.create(**kwargs)
             message = response.choices[0].message
@@ -216,3 +218,7 @@ class Brain:
 
             self.memory.save(user_input, final)
             return final
+
+        final = "I hit my tool-call limit for this request, Sir — it needed more steps than I'm allowed to take at once. Want me to continue?"
+        self.memory.save(user_input, final)
+        return final
