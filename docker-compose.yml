@@ -1,0 +1,13 @@
+services:
+  joestar:
+    build: ./joestar
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./joestar/.env
+    volumes:
+      - ./joestar/data:/app/data
+      - chroma_cache:/home/appuser/.cache/chroma
+
+volumes:
+  chroma_cache:

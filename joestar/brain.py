@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 from datetime import date, datetime
@@ -164,7 +165,7 @@ class Brain:
         is_greeting = user_input.lower().strip() in GREETINGS
         use_tools = not is_greeting
 
-        context = self.memory.retrieve(user_input)
+        context = await asyncio.to_thread(self.memory.retrieve, user_input)
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -184,7 +185,7 @@ class Brain:
                 kwargs["tool_choice"] = "auto"
                 kwargs["parallel_tool_calls"] = True
 
-            response = self.client.chat.completions.create(**kwargs)
+            response = await asyncio.to_thread(self.client.chat.completions.create, **kwargs)
             message = response.choices[0].message
 
             if use_tools and message.tool_calls:
@@ -208,7 +209,7 @@ class Brain:
                     fn = TOOL_MAP.get(tc.function.name)
                     try:
                         args = json.loads(tc.function.arguments)
-                        result = fn(**args) if fn else "Tool not found"
+                        result = await asyncio.to_thread(fn, **args) if fn else "Tool not found"
                     except Exception as e:
                         result = f"Tool error: {e}"
 
@@ -226,11 +227,11 @@ class Brain:
             if not final:
                 final = "Standing by, Sir."
 
-            self.memory.save(user_input, final)
+            await asyncio.to_thread(self.memory.save, user_input, final)
             return final
 
         final = "I hit my tool-call limit for this request, Sir — it needed more steps than I'm allowed to take at once. Want me to continue?"
-        self.memory.save(user_input, final)
+        await asyncio.to_thread(self.memory.save, user_input, final)
         return final
 
     async def proactive_check(self) -> str | None:
@@ -240,7 +241,7 @@ class Brain:
         except Exception:
             schedule = []
 
-        recent = self.memory.get_recent(5)
+        recent = await asyncio.to_thread(self.memory.get_recent, 5)
         recent_text = "\n".join(
             f"User: {u[:200]}\nJOESTAR: {a[:200]}" for u, a in recent
         ) or "No recent conversation."
@@ -252,7 +253,8 @@ class Brain:
             f"Recent conversation:\n{recent_text}"
         )
 
-        response = self.client.chat.completions.create(
+        response = await asyncio.to_thread(
+            self.client.chat.completions.create,
             model="openai/gpt-oss-120b",
             max_tokens=300,
             reasoning_effort="low",
