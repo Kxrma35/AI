@@ -8,13 +8,31 @@ from fastapi import FastAPI, WebSocket
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from google.auth.transport import requests as google_auth_requests
+from google.oauth2 import id_token as google_id_token
 from brain import Brain
 from voice import synthesize_speech
 from tools.web_search import search_web
 import json
 import asyncio
+import os
 
 app = FastAPI()
+
+FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID")
+_google_auth_request = google_auth_requests.Request()
+
+
+def verify_firebase_token(token: str) -> dict | None:
+    """Verify a Firebase ID token and return its claims, or None if invalid."""
+    if not token or not FIREBASE_PROJECT_ID:
+        return None
+    try:
+        return google_id_token.verify_firebase_token(
+            token, _google_auth_request, audience=FIREBASE_PROJECT_ID
+        )
+    except Exception:
+        return None
 
 app.add_middleware(
     CORSMiddleware,
@@ -68,8 +86,20 @@ async def proactive_loop(websocket: WebSocket):
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
     await websocket.accept()
+
+    claims = await asyncio.to_thread(verify_firebase_token, token)
+    if not claims:
+        await websocket.send_text(json.dumps({
+            "type": "auth_error",
+            "content": "Please sign in again."
+        }))
+        await websocket.close(code=1008)
+        return
+
+    user_name = claims.get("name") or claims.get("email") or "Sir"
+    brain.set_user(user_name)
 
     try:
         briefing = await brain.proactive_check()

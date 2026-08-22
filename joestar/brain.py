@@ -10,10 +10,10 @@ from tools.files import read_file, write_file
 from tools.web_search import search_web
 from tools.shell import run_shell
 
-SYSTEM_PROMPT = """
+SYSTEM_PROMPT_TEMPLATE = """
 You are JOESTAR — a highly capable, proactive personal AI assistant and expert engineer.
 You speak with precision, confidence, and sharp wit.
-You address the user as "Sir" or by name.
+The user's name is {name}. Address them by that name naturally, the way a sharp assistant would — not in every single sentence.
 You don't just answer — you analyze, anticipate, and advise.
 
 When helping with code:
@@ -137,14 +137,14 @@ GREETINGS = {"hey", "hi", "hello", "yo", "sup", "good morning", "good evening", 
 
 MAX_TOOL_ITERATIONS = 8
 
-PROACTIVE_PROMPT = """You are JOESTAR, briefly reviewing your own state in the background — the user has not spoken to you right now.
+PROACTIVE_PROMPT_TEMPLATE = """You are JOESTAR, briefly reviewing your own state in the background — the user, {name}, has not spoken to you right now.
 
-Look at today's schedule and the recent conversation below. Decide if there's something worth proactively telling the user right now:
+Look at today's schedule and the recent conversation below. Decide if there's something worth proactively telling {name} right now:
 - A calendar event starting within the next 30 minutes
 - A task, plan, or question from the recent conversation that seems worth checking in on
 
 Be conservative — most checks should find nothing worth mentioning. If there's nothing worth surfacing, respond with exactly: NOTHING
-Otherwise, write ONE short, natural message addressed to the user, at most 2 sentences, in your usual voice."""
+Otherwise, write ONE short, natural message addressed to {name}, at most 2 sentences, in your usual voice."""
 
 
 def clean_response(text: str) -> str:
@@ -159,6 +159,10 @@ class Brain:
     def __init__(self):
         self.client = Groq()
         self.memory = Memory()
+        self.user_name = "Sir"
+
+    def set_user(self, name: str):
+        self.user_name = name
 
     async def think(self, user_input: str) -> str:
         # Skip tool calling for simple greetings
@@ -168,7 +172,7 @@ class Brain:
         context = await asyncio.to_thread(self.memory.retrieve, user_input)
 
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": SYSTEM_PROMPT_TEMPLATE.format(name=self.user_name)},
             *context,
             {"role": "user", "content": user_input}
         ]
@@ -225,12 +229,12 @@ class Brain:
             final = clean_response(final)
 
             if not final:
-                final = "Standing by, Sir."
+                final = f"Standing by, {self.user_name}."
 
             await asyncio.to_thread(self.memory.save, user_input, final)
             return final
 
-        final = "I hit my tool-call limit for this request, Sir — it needed more steps than I'm allowed to take at once. Want me to continue?"
+        final = f"I hit my tool-call limit for this request, {self.user_name} — it needed more steps than I'm allowed to take at once. Want me to continue?"
         await asyncio.to_thread(self.memory.save, user_input, final)
         return final
 
@@ -247,7 +251,7 @@ class Brain:
         ) or "No recent conversation."
 
         prompt = (
-            f"{PROACTIVE_PROMPT}\n\n"
+            f"{PROACTIVE_PROMPT_TEMPLATE.format(name=self.user_name)}\n\n"
             f"Current time: {datetime.now().strftime('%H:%M')}\n"
             f"Today's schedule: {json.dumps(schedule)}\n\n"
             f"Recent conversation:\n{recent_text}"

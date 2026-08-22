@@ -8,3 +8,4 @@ icalendar
 pytz
 groq
 edge-tts
+google-auth

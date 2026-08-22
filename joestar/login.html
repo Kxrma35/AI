@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>JOESTAR — Sign In</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+
+<div class="corner corner-tl"></div>
+<div class="corner corner-tr"></div>
+<div class="corner corner-bl"></div>
+<div class="corner corner-br"></div>
+
+<div class="auth-shell">
+  <div class="auth-orb-wrap">
+    <div class="auth-orb-ring"></div>
+    <div class="auth-orb-ring"></div>
+    <div class="auth-orb-ring"></div>
+    <canvas id="orb-canvas" width="280" height="280"></canvas>
+  </div>
+
+  <div class="auth-panel">
+    <div class="logo" style="text-align:center;margin-bottom:24px">JOESTAR</div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-signin">SIGN IN</button>
+      <button class="auth-tab" id="tab-signup">SIGN UP</button>
+    </div>
+
+    <div id="auth-error" class="auth-error"></div>
+
+    <form id="signin-form" class="auth-form">
+      <input class="auth-input" id="signin-email" type="email" placeholder="Email" required autocomplete="email" />
+      <input class="auth-input" id="signin-password" type="password" placeholder="Password" required autocomplete="current-password" />
+      <button class="auth-submit" type="submit">SIGN IN</button>
+    </form>
+
+    <form id="signup-form" class="auth-form" style="display:none">
+      <input class="auth-input" id="signup-name" type="text" placeholder="Your name" required autocomplete="name" />
+      <input class="auth-input" id="signup-email" type="email" placeholder="Email" required autocomplete="email" />
+      <input class="auth-input" id="signup-password" type="password" placeholder="Password (min 6 characters)" required autocomplete="new-password" minlength="6" />
+      <button class="auth-submit" type="submit">CREATE ACCOUNT</button>
+    </form>
+
+    <div class="auth-divider"><span>OR</span></div>
+
+    <button class="auth-google" id="google-btn">
+      <i class="fa-brands fa-google"></i> Continue with Google
+    </button>
+  </div>
+</div>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script type="module" src="login.js"></script>
+
+</body>
+</html>
