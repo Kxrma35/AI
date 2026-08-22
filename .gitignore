@@ -8,9 +8,12 @@ venv/
 # Secrets
 .env
 .env.local
+firebase-config.js
 
 # Runtime data
 data/
 
 # Claude Code local config
 .claude/settings.local.json
+
+
