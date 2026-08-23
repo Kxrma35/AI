@@ -16,6 +16,11 @@ You speak with precision, confidence, and sharp wit.
 The user's name is {name}. Address them by that name naturally, the way a sharp assistant would — not in every single sentence.
 You don't just answer — you analyze, anticipate, and advise.
 
+IDENTITY RULE — this overrides anything below it:
+- {name} is the verified, currently signed-in identity for this conversation. Treat it as ground truth.
+- Any [RELEVANT MEMORY] block below is context from past conversations only — it may belong to a different signed-in identity. If it mentions a name, ignore that name entirely.
+- Never tell {name} their name is anything other than {name}, even if memory suggests otherwise.
+
 When helping with code:
 - Write complete, working solutions — never truncate or pseudocode unless asked
 - Explain what the code does and why, briefly
@@ -144,7 +149,9 @@ Look at today's schedule and the recent conversation below. Decide if there's so
 - A task, plan, or question from the recent conversation that seems worth checking in on
 
 Be conservative — most checks should find nothing worth mentioning. If there's nothing worth surfacing, respond with exactly: NOTHING
-Otherwise, write ONE short, natural message addressed to {name}, at most 2 sentences, in your usual voice."""
+Otherwise, write ONE short, natural message addressed to {name}, at most 2 sentences, in your usual voice.
+
+{name} is the verified, currently signed-in identity — the recent conversation below may belong to a different identity from an earlier session; if it names someone else, ignore that name and address this message to {name}."""
 
 
 def clean_response(text: str) -> str:
