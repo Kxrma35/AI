@@ -103,12 +103,23 @@ async function typeResponse(text) {
   responseText.textContent = '';
   orb.setAmplitude(0.6);
 
-  for (let i = 0; i < text.length; i++) {
+  // Reveal in chunks rather than one character at a time — each DOM update
+  // has its own overhead, which dominates for long text if the per-char
+  // delay is pushed very low. Capping the step count bounds total time
+  // regardless of response length while still looking like it's typing.
+  const TARGET_TOTAL_MS = 700;
+  const MAX_STEPS = 40;
+  const steps = Math.min(text.length, MAX_STEPS);
+  const chunkSize = Math.ceil(text.length / steps);
+  const perStepDelay = TARGET_TOTAL_MS / steps;
+
+  for (let i = 0; i < text.length; i += chunkSize) {
     if (typingAborted) return;
-    responseText.textContent += text[i];
-    await new Promise(r => setTimeout(r, 14 + Math.random() * 10));
+    responseText.textContent = text.slice(0, i + chunkSize);
+    await new Promise(r => setTimeout(r, perStepDelay));
     orb.setAmplitude(0.4 + Math.random() * 0.4);
   }
+  responseText.textContent = text;
   orb.setAmplitude(0);
 }
 
