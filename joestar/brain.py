@@ -17,6 +17,7 @@ from tools.code_exec import run_python_snippet, run_tests, lint_code
 from tools.network_recon import port_scan, dns_lookup, whois_lookup
 from tools.vuln_scan import check_ssl_cert, check_security_headers, check_python_dependencies
 from tools.gemini_consult import consult_gemini
+from tools.local_llm import local_llm_generate
 
 SYSTEM_PROMPT_TEMPLATE = """
 You are JOESTAR — a highly capable, proactive personal AI assistant and expert engineer.
@@ -375,7 +376,7 @@ class Brain:
         """Called when Groq itself fails — answers via Gemini instead, without tool access."""
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            return f"My primary model is unavailable right now, {self.user_name}, and no backup is configured: {groq_error}"
+            return self._local_fallback(user_input, groq_error)
         try:
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
@@ -390,9 +391,21 @@ class Brain:
                 ),
             )
             text = clean_response(response.text or "")
-            return text or f"My primary model is down, {self.user_name}, and the backup didn't return anything useful."
-        except Exception as e:
-            return f"Both my primary and backup models are having trouble right now, {self.user_name}: {e}"
+            return text or self._local_fallback(user_input, groq_error)
+        except Exception as gemini_error:
+            return self._local_fallback(user_input, gemini_error)
+
+    def _local_fallback(self, user_input: str, prior_error: Exception) -> str:
+        """Last resort when both cloud models are unreachable — a small model running fully offline, no API key or rate limits."""
+        system = (
+            f"You are JOESTAR, a personal AI assistant, running fully offline on a small local backup model "
+            f"because both your primary and secondary cloud models are unavailable. The user's name is "
+            f"{self.user_name}. Respond in plain natural prose — no Markdown syntax."
+        )
+        text = local_llm_generate(user_input, system=system)
+        if text and not text.startswith("Local model unavailable"):
+            return clean_response(text)
+        return f"All of my models are unreachable right now, {self.user_name}: {prior_error}"
 
     async def think(self, user_input: str) -> str:
         # Skip tool calling for simple greetings
