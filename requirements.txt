@@ -9,3 +9,6 @@ pytz
 groq
 edge-tts
 google-auth
+dnspython
+python-whois
+pip-audit

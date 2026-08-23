@@ -9,6 +9,10 @@ from tools.calendar import get_schedule
 from tools.files import read_file, write_file
 from tools.web_search import search_web
 from tools.shell import run_shell
+from tools.git_tools import git_status, git_diff
+from tools.code_exec import run_python_snippet, run_tests, lint_code
+from tools.network_recon import port_scan, dns_lookup, whois_lookup
+from tools.vuln_scan import check_ssl_cert, check_security_headers, check_python_dependencies
 
 SYSTEM_PROMPT_TEMPLATE = """
 You are JOESTAR — a highly capable, proactive personal AI assistant and expert engineer.
@@ -132,6 +136,165 @@ TOOLS = [
                 "required": ["command"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_status",
+            "description": "Get the git status (branch, staged/unstaged changes) of a repository.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the git repository (default current directory)"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_diff",
+            "description": "Get the diff of uncommitted changes in a git repository.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the git repository (default current directory)"},
+                    "staged": {"type": "boolean", "description": "Show staged changes instead of unstaged (default false)"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_python_snippet",
+            "description": "Run a short Python code snippet and return its stdout/stderr. Use for quick calculations, testing logic, or debugging.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "The Python code to execute"},
+                    "timeout": {"type": "integer", "description": "Max seconds to allow (default 10)"}
+                },
+                "required": ["code"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_tests",
+            "description": "Run a project's test suite and return the results.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Project path (default current directory)"},
+                    "command": {"type": "string", "description": "Explicit test command to run — if omitted, auto-detects pytest or npm test"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "lint_code",
+            "description": "Run a code linter (ruff, eslint, or flake8 — whichever is available) on a path and return issues found.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to lint (default current directory)"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "port_scan",
+            "description": "Scan a host for open TCP ports. Use only against systems you own or are authorized to test.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "host": {"type": "string", "description": "Hostname or IP to scan"},
+                    "ports": {"type": "string", "description": "Port or range, e.g. '80' or '1-1024' (max 1024 ports per scan)"}
+                },
+                "required": ["host"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "dns_lookup",
+            "description": "Look up DNS records (A, AAAA, MX, TXT, NS, CNAME) for a domain.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "domain": {"type": "string"}
+                },
+                "required": ["domain"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "whois_lookup",
+            "description": "Look up WHOIS registration info (registrar, creation/expiry dates, name servers) for a domain.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "domain": {"type": "string"}
+                },
+                "required": ["domain"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_ssl_cert",
+            "description": "Check a domain's SSL/TLS certificate details, including issuer and days until expiry.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "domain": {"type": "string"},
+                    "port": {"type": "integer", "description": "Port to connect on (default 443)"}
+                },
+                "required": ["domain"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_security_headers",
+            "description": "Check whether a URL's response includes standard security headers (HSTS, CSP, X-Frame-Options, etc.) and flag which are missing.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string"}
+                },
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_python_dependencies",
+            "description": "Audit a project's requirements.txt for known vulnerable Python package versions (via pip-audit).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Project path containing requirements.txt (default current directory)"}
+                },
+                "required": []
+            }
+        }
     }
 ]
 
@@ -142,6 +305,17 @@ TOOL_MAP = {
     "write_file": write_file,
     "search_web": search_web,
     "run_shell": run_shell,
+    "git_status": git_status,
+    "git_diff": git_diff,
+    "run_python_snippet": run_python_snippet,
+    "run_tests": run_tests,
+    "lint_code": lint_code,
+    "port_scan": port_scan,
+    "dns_lookup": dns_lookup,
+    "whois_lookup": whois_lookup,
+    "check_ssl_cert": check_ssl_cert,
+    "check_security_headers": check_security_headers,
+    "check_python_dependencies": check_python_dependencies,
 }
 
 GREETINGS = {"hey", "hi", "hello", "yo", "sup", "good morning", "good evening", "good afternoon", "morning", "evening"}
