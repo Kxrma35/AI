@@ -12,8 +12,17 @@ class Memory:
     def __init__(self):
         self.conn_string = os.getenv("SUPABASE_DB_URL")
         self._embedding_fn = embedding_functions.DefaultEmbeddingFunction()
-        self._connect()
-        self._init_db()
+        self.conn = None
+        self._db_ready = False
+        try:
+            self._connect()
+            self._init_db()
+            self._db_ready = True
+        except Exception as e:
+            # Don't let a startup DB hiccup take down the whole app — memory
+            # degrades gracefully (chat still works, just without persistence)
+            # and every public method below retries the connection on next use.
+            print(f"[Memory] could not connect at startup, will retry on first use: {e}")
 
     def _connect(self):
         self.conn = psycopg2.connect(self.conn_string, sslmode="require", connect_timeout=10)
@@ -21,11 +30,23 @@ class Memory:
         register_vector(self.conn)
 
     def _ensure_connection(self):
+        """Returns True if the connection is usable, False if unreachable (caller should degrade gracefully)."""
+        if self.conn is not None:
+            try:
+                with self.conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                return True
+            except Exception:
+                pass
         try:
-            with self.conn.cursor() as cur:
-                cur.execute("SELECT 1")
-        except Exception:
             self._connect()
+            if not self._db_ready:
+                self._init_db()
+                self._db_ready = True
+            return True
+        except Exception as e:
+            print(f"[Memory] connection unavailable: {e}")
+            return False
 
     def _embed(self, text: str):
         return self._embedding_fn([text])[0]
@@ -50,14 +71,16 @@ class Memory:
             """)
 
     def get_last_reflection_time(self):
-        self._ensure_connection()
+        if not self._ensure_connection():
+            return None
         with self.conn.cursor() as cur:
             cur.execute("SELECT value FROM app_state WHERE key = 'last_reflection_at'")
             row = cur.fetchone()
             return row[0] if row else None
 
     def set_last_reflection_time(self, iso_timestamp: str):
-        self._ensure_connection()
+        if not self._ensure_connection():
+            return
         with self.conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO app_state (key, value) VALUES ('last_reflection_at', %s) "
@@ -66,7 +89,8 @@ class Memory:
             )
 
     def save(self, user_input: str, response: str):
-        self._ensure_connection()
+        if not self._ensure_connection():
+            return
         embedding = self._embed(f"User: {user_input}\nJOESTAR: {response}")
         with self.conn.cursor() as cur:
             cur.execute(
@@ -76,7 +100,8 @@ class Memory:
 
     def get_recent(self, n=5) -> list:
         """Get the n most recent exchanges, oldest first."""
-        self._ensure_connection()
+        if not self._ensure_connection():
+            return []
         with self.conn.cursor() as cur:
             cur.execute(
                 "SELECT user_input, assistant_response FROM conversations ORDER BY id DESC LIMIT %s",
@@ -87,7 +112,8 @@ class Memory:
 
     def get_history(self, limit=50, offset=0) -> list:
         """Get paginated conversation history, most recent first."""
-        self._ensure_connection()
+        if not self._ensure_connection():
+            return []
         with self.conn.cursor() as cur:
             cur.execute(
                 "SELECT id, timestamp, user_input, assistant_response FROM conversations "
@@ -106,7 +132,8 @@ class Memory:
         ]
 
     def get_history_count(self) -> int:
-        self._ensure_connection()
+        if not self._ensure_connection():
+            return 0
         with self.conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM conversations")
             return cur.fetchone()[0]
@@ -114,7 +141,8 @@ class Memory:
     def retrieve(self, query: str, n=3) -> list:
         """Retrieve semantically relevant past memories."""
         try:
-            self._ensure_connection()
+            if not self._ensure_connection():
+                return []
             embedding = self._embed(query)
             with self.conn.cursor() as cur:
                 cur.execute(
