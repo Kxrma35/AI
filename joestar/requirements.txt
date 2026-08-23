@@ -13,3 +13,5 @@ dnspython
 python-whois
 pip-audit
 google-genai
+psycopg2-binary
+pgvector

@@ -1,101 +1,132 @@
-import sqlite3
-import chromadb
+import os
 from datetime import datetime
-from pathlib import Path
 
-# Ensure data directory exists
-DATA_DIR = Path(__file__).parent / "data"
-DATA_DIR.mkdir(exist_ok=True)
+import psycopg2
+from pgvector.psycopg2 import register_vector
+from chromadb.utils import embedding_functions
+
+EMBEDDING_DIM = 384
+
 
 class Memory:
     def __init__(self):
-        # Short-term: SQLite
-        self.conn = sqlite3.connect(str(DATA_DIR / "joestar.db"), check_same_thread=False)
+        self.conn_string = os.getenv("SUPABASE_DB_URL")
+        self._embedding_fn = embedding_functions.DefaultEmbeddingFunction()
+        self._connect()
         self._init_db()
 
-        # Long-term: ChromaDB vector store
-        self.chroma = chromadb.PersistentClient(path=str(DATA_DIR / "chroma"))
-        self.collection = self.chroma.get_or_create_collection("joestar_memory")
+    def _connect(self):
+        self.conn = psycopg2.connect(self.conn_string, sslmode="require", connect_timeout=10)
+        self.conn.autocommit = True
+        register_vector(self.conn)
+
+    def _ensure_connection(self):
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("SELECT 1")
+        except Exception:
+            self._connect()
+
+    def _embed(self, text: str):
+        return self._embedding_fn([text])[0]
 
     def _init_db(self):
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT,
-                user_input TEXT,
-                assistant_response TEXT
-            )
-        """)
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS app_state (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            )
-        """)
-        self.conn.commit()
+        with self.conn.cursor() as cur:
+            cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+            cur.execute(f"""
+                CREATE TABLE IF NOT EXISTS conversations (
+                    id SERIAL PRIMARY KEY,
+                    timestamp TIMESTAMPTZ DEFAULT now(),
+                    user_input TEXT,
+                    assistant_response TEXT,
+                    embedding VECTOR({EMBEDDING_DIM})
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS app_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            """)
 
     def get_last_reflection_time(self):
-        cur = self.conn.execute("SELECT value FROM app_state WHERE key = 'last_reflection_at'")
-        row = cur.fetchone()
-        return row[0] if row else None
+        self._ensure_connection()
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT value FROM app_state WHERE key = 'last_reflection_at'")
+            row = cur.fetchone()
+            return row[0] if row else None
 
     def set_last_reflection_time(self, iso_timestamp: str):
-        self.conn.execute(
-            "INSERT INTO app_state (key, value) VALUES ('last_reflection_at', ?) "
-            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            (iso_timestamp,)
-        )
-        self.conn.commit()
+        self._ensure_connection()
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO app_state (key, value) VALUES ('last_reflection_at', %s) "
+                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+                (iso_timestamp,)
+            )
 
     def save(self, user_input: str, response: str):
-        # Save to SQLite
-        self.conn.execute(
-            "INSERT INTO conversations VALUES (NULL, ?, ?, ?)",
-            (datetime.now().isoformat(), user_input, response)
-        )
-        self.conn.commit()
-
-        # Save to ChromaDB for semantic search
-        self.collection.add(
-            documents=[f"User: {user_input}\nJOESTAR: {response}"],
-            ids=[f"mem_{datetime.now().timestamp()}"]
-        )
+        self._ensure_connection()
+        embedding = self._embed(f"User: {user_input}\nJOESTAR: {response}")
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO conversations (user_input, assistant_response, embedding) VALUES (%s, %s, %s)",
+                (user_input, response, embedding)
+            )
 
     def get_recent(self, n=5) -> list:
         """Get the n most recent exchanges, oldest first."""
-        cur = self.conn.execute(
-            "SELECT user_input, assistant_response FROM conversations ORDER BY id DESC LIMIT ?",
-            (n,)
-        )
-        return list(reversed(cur.fetchall()))
+        self._ensure_connection()
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT user_input, assistant_response FROM conversations ORDER BY id DESC LIMIT %s",
+                (n,)
+            )
+            rows = cur.fetchall()
+        return list(reversed(rows))
 
     def get_history(self, limit=50, offset=0) -> list:
         """Get paginated conversation history, most recent first."""
-        cur = self.conn.execute(
-            "SELECT id, timestamp, user_input, assistant_response FROM conversations ORDER BY id DESC LIMIT ? OFFSET ?",
-            (limit, offset)
-        )
+        self._ensure_connection()
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, timestamp, user_input, assistant_response FROM conversations "
+                "ORDER BY id DESC LIMIT %s OFFSET %s",
+                (limit, offset)
+            )
+            rows = cur.fetchall()
         return [
-            {"id": row[0], "timestamp": row[1], "user_input": row[2], "assistant_response": row[3]}
-            for row in cur.fetchall()
+            {
+                "id": row[0],
+                "timestamp": row[1].isoformat() if row[1] else None,
+                "user_input": row[2],
+                "assistant_response": row[3],
+            }
+            for row in rows
         ]
 
     def get_history_count(self) -> int:
-        cur = self.conn.execute("SELECT COUNT(*) FROM conversations")
-        return cur.fetchone()[0]
+        self._ensure_connection()
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM conversations")
+            return cur.fetchone()[0]
 
     def retrieve(self, query: str, n=3) -> list:
         """Retrieve semantically relevant past memories."""
         try:
-            results = self.collection.query(
-                query_texts=[query],
-                n_results=n
-            )
-            docs = results["documents"][0]
-            if not docs:
+            self._ensure_connection()
+            embedding = self._embed(query)
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    "SELECT user_input, assistant_response FROM conversations "
+                    "ORDER BY embedding <=> %s LIMIT %s",
+                    (embedding, n)
+                )
+                rows = cur.fetchall()
+            if not rows:
                 return []
 
-            memory_text = "\n---\n".join(docs)
+            memory_text = "\n---\n".join(f"User: {u}\nJOESTAR: {a}" for u, a in rows)
             return [{
                 "role": "user",
                 "content": f"[RELEVANT MEMORY]\n{memory_text}\n[END MEMORY]"

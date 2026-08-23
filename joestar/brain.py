@@ -383,6 +383,16 @@ class Brain:
     def set_user(self, name: str):
         self.user_name = name
 
+    def _recent_context_text(self) -> str:
+        """Recent conversation, formatted for a fallback model's system prompt — so it isn't amnesiac."""
+        try:
+            recent = self.memory.get_recent(5)
+        except Exception:
+            recent = []
+        if not recent:
+            return "No recent conversation on record."
+        return "\n".join(f"User: {u[:200]}\nJOESTAR: {a[:200]}" for u, a in recent)
+
     def _gemini_fallback(self, user_input: str, groq_error: Exception) -> str:
         """Called when Groq itself fails — answers via Gemini instead, without tool access."""
         api_key = os.getenv("GEMINI_API_KEY")
@@ -397,7 +407,10 @@ class Brain:
                     system_instruction=(
                         f"You are JOESTAR, a personal AI assistant, temporarily running on a backup model "
                         f"because your primary model is unavailable. The user's name is {self.user_name}. "
-                        f"Respond in plain natural prose — no Markdown syntax — since this may be read aloud."
+                        f"Respond in plain natural prose — no Markdown syntax — since this may be read aloud.\n\n"
+                        f"Recent conversation for context (you don't have tool access right now, but you do "
+                        f"have this history — don't claim you have no memory of past conversations):\n"
+                        f"{self._recent_context_text()}"
                     )
                 ),
             )
@@ -411,7 +424,9 @@ class Brain:
         system = (
             f"You are JOESTAR, a personal AI assistant, running fully offline on a small local backup model "
             f"because both your primary and secondary cloud models are unavailable. The user's name is "
-            f"{self.user_name}. Respond in plain natural prose — no Markdown syntax."
+            f"{self.user_name}. Respond in plain natural prose — no Markdown syntax.\n\n"
+            f"Recent conversation for context (don't claim you have no memory of past conversations):\n"
+            f"{self._recent_context_text()}"
         )
         text = local_llm_generate(user_input, system=system)
         if text and not text.startswith("Local model unavailable"):
