@@ -1,8 +1,11 @@
 import asyncio
 import json
+import os
 import re
 from datetime import date, datetime
 from groq import Groq
+from google import genai
+from google.genai import types as genai_types
 from memory import Memory
 from tools.weather import get_weather
 from tools.calendar import get_schedule
@@ -13,6 +16,7 @@ from tools.git_tools import git_status, git_diff
 from tools.code_exec import run_python_snippet, run_tests, lint_code
 from tools.network_recon import port_scan, dns_lookup, whois_lookup
 from tools.vuln_scan import check_ssl_cert, check_security_headers, check_python_dependencies
+from tools.gemini_consult import consult_gemini
 
 SYSTEM_PROMPT_TEMPLATE = """
 You are JOESTAR — a highly capable, proactive personal AI assistant and expert engineer.
@@ -30,6 +34,7 @@ RESPONSE FORMATTING — you are a voice assistant with a compact text readout, n
 - Write in plain, natural prose — the way you'd actually say it out loud, since your responses are also spoken aloud via text-to-speech.
 - If you need to walk through multiple items, do it as short plain sentences, not a formatted list.
 - The one exception is actual code: wrap code in triple-backtick fenced blocks as usual — that's rendered as code, not read aloud.
+- Tool results (including consult_gemini) may come back containing Markdown — never relay that formatting verbatim; rewrite it as plain prose before responding.
 
 When helping with code:
 - Write complete, working solutions — never truncate or pseudocode unless asked
@@ -295,6 +300,20 @@ TOOLS = [
                 "required": []
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "consult_gemini",
+            "description": "Ask Google Gemini (a different AI model) for a second opinion, deeper research, or broader/more thorough information on a question — use when a query needs more investigation than you can give directly.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The question or topic to research"}
+                },
+                "required": ["query"]
+            }
+        }
     }
 ]
 
@@ -316,6 +335,7 @@ TOOL_MAP = {
     "check_ssl_cert": check_ssl_cert,
     "check_security_headers": check_security_headers,
     "check_python_dependencies": check_python_dependencies,
+    "consult_gemini": consult_gemini,
 }
 
 GREETINGS = {"hey", "hi", "hello", "yo", "sup", "good morning", "good evening", "good afternoon", "morning", "evening"}
@@ -351,6 +371,29 @@ class Brain:
     def set_user(self, name: str):
         self.user_name = name
 
+    def _gemini_fallback(self, user_input: str, groq_error: Exception) -> str:
+        """Called when Groq itself fails — answers via Gemini instead, without tool access."""
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return f"My primary model is unavailable right now, {self.user_name}, and no backup is configured: {groq_error}"
+        try:
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=user_input,
+                config=genai_types.GenerateContentConfig(
+                    system_instruction=(
+                        f"You are JOESTAR, a personal AI assistant, temporarily running on a backup model "
+                        f"because your primary model is unavailable. The user's name is {self.user_name}. "
+                        f"Respond in plain natural prose — no Markdown syntax — since this may be read aloud."
+                    )
+                ),
+            )
+            text = clean_response(response.text or "")
+            return text or f"My primary model is down, {self.user_name}, and the backup didn't return anything useful."
+        except Exception as e:
+            return f"Both my primary and backup models are having trouble right now, {self.user_name}: {e}"
+
     async def think(self, user_input: str) -> str:
         # Skip tool calling for simple greetings
         is_greeting = user_input.lower().strip() in GREETINGS
@@ -364,9 +407,13 @@ class Brain:
             {"role": "user", "content": user_input}
         ]
 
+        # Simple, tool-free queries (greetings) don't need the bigger model's
+        # reasoning depth — the smaller model answers just as well, faster.
+        model = "openai/gpt-oss-20b" if is_greeting else "openai/gpt-oss-120b"
+
         for iteration in range(MAX_TOOL_ITERATIONS):
             kwargs = dict(
-                model="openai/gpt-oss-120b",
+                model=model,
                 max_tokens=4096,
                 messages=messages,
             )
@@ -376,7 +423,14 @@ class Brain:
                 kwargs["tool_choice"] = "auto"
                 kwargs["parallel_tool_calls"] = True
 
-            response = await asyncio.to_thread(self.client.chat.completions.create, **kwargs)
+            try:
+                response = await asyncio.to_thread(self.client.chat.completions.create, **kwargs)
+            except Exception as e:
+                # Groq itself is having issues — fall back to Gemini so the
+                # user still gets an answer, even without tool access this turn.
+                final = await asyncio.to_thread(self._gemini_fallback, user_input, e)
+                await asyncio.to_thread(self.memory.save, user_input, final)
+                return final
             message = response.choices[0].message
 
             if use_tools and message.tool_calls:

@@ -12,3 +12,4 @@ google-auth
 dnspython
 python-whois
 pip-audit
+google-genai
