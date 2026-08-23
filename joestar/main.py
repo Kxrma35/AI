@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 FRONTEND_DIR = Path(__file__).parent
 load_dotenv(FRONTEND_DIR / ".env")
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, HTTPException, WebSocket
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -137,6 +137,22 @@ async def search_endpoint(query: dict):
         loop = asyncio.get_event_loop()
         results = await loop.run_in_executor(None, search_web, search_query)
         return {"query": search_query, "results": results}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/history")
+async def get_history(token: str = None, limit: int = 50, offset: int = 0):
+    claims = await asyncio.to_thread(verify_firebase_token, token)
+    if not claims:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    try:
+        items = await asyncio.to_thread(brain.memory.get_history, limit, offset)
+        total = await asyncio.to_thread(brain.memory.get_history_count)
+        return {"items": items, "total": total, "limit": limit, "offset": offset}
     except Exception as e:
         return {"error": str(e)}
 

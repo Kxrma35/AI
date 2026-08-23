@@ -50,6 +50,21 @@ class Memory:
         )
         return list(reversed(cur.fetchall()))
 
+    def get_history(self, limit=50, offset=0) -> list:
+        """Get paginated conversation history, most recent first."""
+        cur = self.conn.execute(
+            "SELECT id, timestamp, user_input, assistant_response FROM conversations ORDER BY id DESC LIMIT ? OFFSET ?",
+            (limit, offset)
+        )
+        return [
+            {"id": row[0], "timestamp": row[1], "user_input": row[2], "assistant_response": row[3]}
+            for row in cur.fetchall()
+        ]
+
+    def get_history_count(self) -> int:
+        cur = self.conn.execute("SELECT COUNT(*) FROM conversations")
+        return cur.fetchone()[0]
+
     def retrieve(self, query: str, n=3) -> list:
         """Retrieve semantically relevant past memories."""
         try:

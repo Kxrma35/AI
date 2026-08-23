@@ -50,6 +50,76 @@ document.getElementById('signout-link')?.addEventListener('click', async () => {
   window.location.href = '/login.html';
 });
 
+// ── HISTORY PANEL ──
+const HISTORY_PAGE_SIZE = 50;
+let historyOffset = 0;
+let historyTotal = 0;
+
+const historyOverlay = document.getElementById('history-overlay');
+const historyList = document.getElementById('history-list');
+const historyLoadMoreBtn = document.getElementById('history-load-more');
+
+function formatHistoryTimestamp(iso) {
+  try {
+    return new Date(iso).toLocaleString('en-US', { hour12: false });
+  } catch {
+    return iso;
+  }
+}
+
+function renderHistoryEntries(items, { append = false } = {}) {
+  if (!append) historyList.innerHTML = '';
+
+  if (items.length === 0 && !append) {
+    historyList.innerHTML = '<div class="history-empty">No conversations yet.</div>';
+    return;
+  }
+
+  for (const item of items) {
+    const el = document.createElement('div');
+    el.className = 'history-entry';
+    el.innerHTML = `
+      <div class="history-timestamp">${formatHistoryTimestamp(item.timestamp)}</div>
+      <div class="history-user"></div>
+      <div class="history-response"></div>
+    `;
+    el.querySelector('.history-user').textContent = item.user_input;
+    el.querySelector('.history-response').textContent = item.assistant_response;
+    historyList.appendChild(el);
+  }
+}
+
+async function fetchHistory(offset) {
+  const user = auth.currentUser;
+  if (!user) return;
+  const token = await user.getIdToken();
+  const res = await fetch(`/history?token=${encodeURIComponent(token)}&limit=${HISTORY_PAGE_SIZE}&offset=${offset}`);
+  if (!res.ok) {
+    historyList.innerHTML = '<div class="history-empty">Could not load history.</div>';
+    return;
+  }
+  const data = await res.json();
+  historyTotal = data.total || 0;
+  historyOffset = offset + (data.items || []).length;
+  renderHistoryEntries(data.items || [], { append: offset > 0 });
+  historyLoadMoreBtn.style.display = historyOffset < historyTotal ? 'block' : 'none';
+}
+
+document.getElementById('history-btn')?.addEventListener('click', () => {
+  historyOverlay.classList.add('visible');
+  fetchHistory(0);
+});
+
+document.getElementById('history-close')?.addEventListener('click', () => {
+  historyOverlay.classList.remove('visible');
+});
+
+historyOverlay?.addEventListener('click', (e) => {
+  if (e.target === historyOverlay) historyOverlay.classList.remove('visible');
+});
+
+historyLoadMoreBtn?.addEventListener('click', () => fetchHistory(historyOffset));
+
 // ── SEND MESSAGE ──
 function sendMessage(text) {
   if (!text.trim()) return;

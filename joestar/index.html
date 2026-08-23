@@ -122,6 +122,9 @@
     <button class="search-btn" id="search-btn" title="Web search (Ctrl+K)">
       <i class="fa-solid fa-magnifying-glass"></i>
     </button>
+    <button class="search-btn" id="history-btn" title="Conversation history">
+      <i class="fa-solid fa-clock-rotate-left"></i>
+    </button>
     <div class="input-wrap">
       <input class="chat-input" id="chat-input" type="text" placeholder="Awaiting your command, Sir..." />
     </div>
@@ -132,6 +135,19 @@
   </div>
 </div>
 
+<!-- HISTORY PANEL -->
+<div class="history-overlay" id="history-overlay">
+  <div class="history-modal">
+    <div class="history-header">
+      <span class="panel-title" style="margin:0">Conversation History</span>
+      <button class="history-close" id="history-close">&times;</button>
+    </div>
+    <div class="history-list" id="history-list"></div>
+    <div class="history-footer">
+      <button class="auth-submit" id="history-load-more" style="display:none">Load Older</button>
+    </div>
+  </div>
+</div>
 
 <script type="module" src="script.js"></script>
 
