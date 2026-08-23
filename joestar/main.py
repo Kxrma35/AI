@@ -44,6 +44,7 @@ app.add_middleware(
 brain = Brain()
 
 PROACTIVE_INTERVAL_SECONDS = 900
+REFLECTION_CHECK_INTERVAL_SECONDS = 3600  # checked hourly; Brain.reflect() itself gates to ~once/day
 
 
 def should_speak(text: str) -> bool:
@@ -85,6 +86,18 @@ async def proactive_loop(websocket: WebSocket):
             print(f"[Proactive] error: {e}")
 
 
+async def reflection_loop(websocket: WebSocket):
+    """Periodically check whether a broader look at history surfaces a pattern-based idea."""
+    while True:
+        await asyncio.sleep(REFLECTION_CHECK_INTERVAL_SECONDS)
+        try:
+            message = await brain.reflect()
+            if message:
+                await send_response(websocket, message, proactive=True)
+        except Exception as e:
+            print(f"[Reflection] error: {e}")
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
     await websocket.accept()
@@ -108,7 +121,15 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
     except Exception as e:
         print(f"[Proactive] briefing error: {e}")
 
+    try:
+        idea = await brain.reflect()
+        if idea:
+            await send_response(websocket, idea, proactive=True)
+    except Exception as e:
+        print(f"[Reflection] on-connect error: {e}")
+
     bg_task = asyncio.create_task(proactive_loop(websocket))
+    reflection_task = asyncio.create_task(reflection_loop(websocket))
 
     try:
         while True:
@@ -126,6 +147,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
         pass
     finally:
         bg_task.cancel()
+        reflection_task.cancel()
 
 
 @app.post("/search")

@@ -354,6 +354,17 @@ Otherwise, write ONE short, natural message addressed to {name}, at most 2 sente
 
 {name} is the verified, currently signed-in identity — the recent conversation below may belong to a different identity from an earlier session; if it names someone else, ignore that name and address this message to {name}."""
 
+REFLECTION_INTERVAL_SECONDS = 86400  # minimum gap between reflections, persisted across restarts
+
+REFLECTION_PROMPT_TEMPLATE = """You are JOESTAR, taking a step back to review a longer stretch of past conversations with {name} — not responding to a live message right now.
+
+Look for real patterns across these conversations: recurring topics or interests, projects or ideas {name} has mentioned wanting to build or improve, things left unfinished, or repeated frustrations. Based on what you notice, come up with a concrete, specific, actionable idea or suggestion that would genuinely help {name} make progress on something they actually care about.
+
+Be conservative — only surface something if you spot a real, specific pattern worth acting on, not a generic observation. If there's nothing substantive, respond with exactly: NOTHING
+Otherwise, write ONE short, natural message addressed to {name}, at most 3 sentences, in your usual voice, proposing the idea.
+
+{name} is the verified, currently signed-in identity — the conversation history below may include exchanges from a different identity in an earlier session; if it names someone else, ignore that name and address this message to {name}."""
+
 
 def clean_response(text: str) -> str:
     """Strip any leaked tool call syntax from model output."""
@@ -522,3 +533,57 @@ class Brain:
         if not text or text.upper().startswith("NOTHING"):
             return None
         return clean_response(text)
+
+    async def reflect(self) -> str | None:
+        """Periodically review a broader slice of history for patterns and proactively suggest ideas.
+
+        Gated to at most once per REFLECTION_INTERVAL_SECONDS, persisted in SQLite so it
+        stays roughly daily even across process restarts. Runs on Gemini, not Groq, since
+        it's a background task reading a large chunk of history — better to spend that
+        budget where there's headroom than compete with real-time chat for Groq's tight
+        free-tier limit.
+        """
+        last = await asyncio.to_thread(self.memory.get_last_reflection_time)
+        now = datetime.now()
+        if last:
+            try:
+                elapsed = (now - datetime.fromisoformat(last)).total_seconds()
+            except ValueError:
+                elapsed = REFLECTION_INTERVAL_SECONDS
+            if elapsed < REFLECTION_INTERVAL_SECONDS:
+                return None
+
+        history = await asyncio.to_thread(self.memory.get_history, 150, 0)
+        await asyncio.to_thread(self.memory.set_last_reflection_time, now.isoformat())
+
+        if len(history) < 10:
+            return None  # not enough history yet to spot a meaningful pattern
+
+        history = list(reversed(history))  # chronological order
+        history_text = "\n".join(
+            f"User: {h['user_input'][:200]}\nJOESTAR: {h['assistant_response'][:200]}" for h in history
+        )
+
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return None
+
+        try:
+            client = genai.Client(api_key=api_key)
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model="gemini-3.6-flash",
+                contents=(
+                    f"{REFLECTION_PROMPT_TEMPLATE.format(name=self.user_name)}\n\n"
+                    f"Conversation history:\n{history_text}"
+                ),
+                config=genai_types.GenerateContentConfig(
+                    system_instruction="Respond in plain natural prose only — no Markdown syntax."
+                ),
+            )
+            text = clean_response(response.text or "")
+            if not text or text.upper().startswith("NOTHING"):
+                return None
+            return text
+        except Exception:
+            return None

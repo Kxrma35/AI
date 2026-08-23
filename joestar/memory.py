@@ -26,6 +26,25 @@ class Memory:
                 assistant_response TEXT
             )
         """)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS app_state (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+        self.conn.commit()
+
+    def get_last_reflection_time(self):
+        cur = self.conn.execute("SELECT value FROM app_state WHERE key = 'last_reflection_at'")
+        row = cur.fetchone()
+        return row[0] if row else None
+
+    def set_last_reflection_time(self, iso_timestamp: str):
+        self.conn.execute(
+            "INSERT INTO app_state (key, value) VALUES ('last_reflection_at', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (iso_timestamp,)
+        )
         self.conn.commit()
 
     def save(self, user_input: str, response: str):
