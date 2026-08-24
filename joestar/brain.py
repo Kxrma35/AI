@@ -18,6 +18,7 @@ from tools.network_recon import port_scan, dns_lookup, whois_lookup
 from tools.vuln_scan import check_ssl_cert, check_security_headers, check_python_dependencies
 from tools.gemini_consult import consult_gemini
 from tools.local_llm import local_llm_generate
+from tools.securebot import get_securebot_status
 
 SYSTEM_PROMPT_TEMPLATE = """
 You are JOESTAR — a highly capable, proactive personal AI assistant and expert engineer.
@@ -315,6 +316,18 @@ TOOLS = [
                 "required": ["query"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_securebot_status",
+            "description": "Check the SecureBot IoT tamper-detection system — get the latest accelerometer/gyroscope telemetry and any recent physical tampering alerts from the sensor covering the user's space.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
     }
 ]
 
@@ -337,6 +350,7 @@ TOOL_MAP = {
     "check_security_headers": check_security_headers,
     "check_python_dependencies": check_python_dependencies,
     "consult_gemini": consult_gemini,
+    "get_securebot_status": get_securebot_status,
 }
 
 GREETINGS = {"hey", "hi", "hello", "yo", "sup", "good morning", "good evening", "good afternoon", "morning", "evening"}
@@ -345,9 +359,10 @@ MAX_TOOL_ITERATIONS = 8
 
 PROACTIVE_PROMPT_TEMPLATE = """You are JOESTAR, briefly reviewing your own state in the background — the user, {name}, has not spoken to you right now.
 
-Look at today's schedule and the recent conversation below. Decide if there's something worth proactively telling {name} right now:
+Look at today's schedule, SecureBot's status, and the recent conversation below. Decide if there's something worth proactively telling {name} right now:
 - A calendar event starting within the next 30 minutes
 - A task, plan, or question from the recent conversation that seems worth checking in on
+- A tamper alert from SecureBot (physical tampering with the monitored space) — always worth surfacing if present
 
 Be conservative — most checks should find nothing worth mentioning. If there's nothing worth surfacing, respond with exactly: NOTHING
 Otherwise, write ONE short, natural message addressed to {name}, at most 2 sentences, in your usual voice.
@@ -525,6 +540,16 @@ class Brain:
         except Exception:
             schedule = []
 
+        securebot = await asyncio.to_thread(get_securebot_status)
+        new_alerts = []
+        if securebot.get("reachable") and securebot.get("recent_alerts"):
+            last_seen = await asyncio.to_thread(self.memory.get_last_securebot_alert_ts) or 0
+            new_alerts = [a for a in securebot["recent_alerts"] if a.get("ts", 0) > last_seen]
+            if new_alerts:
+                newest_ts = max(a.get("ts", 0) for a in securebot["recent_alerts"])
+                await asyncio.to_thread(self.memory.set_last_securebot_alert_ts, newest_ts)
+        securebot_text = json.dumps(new_alerts) if new_alerts else "No new alerts."
+
         recent = await asyncio.to_thread(self.memory.get_recent, 5)
         recent_text = "\n".join(
             f"User: {u[:200]}\nJOESTAR: {a[:200]}" for u, a in recent
@@ -534,6 +559,7 @@ class Brain:
             f"{PROACTIVE_PROMPT_TEMPLATE.format(name=self.user_name)}\n\n"
             f"Current time: {datetime.now().strftime('%H:%M')}\n"
             f"Today's schedule: {json.dumps(schedule)}\n\n"
+            f"SecureBot tamper alerts: {securebot_text}\n\n"
             f"Recent conversation:\n{recent_text}"
         )
 

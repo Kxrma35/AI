@@ -88,6 +88,24 @@ class Memory:
                 (iso_timestamp,)
             )
 
+    def get_last_securebot_alert_ts(self):
+        if not self._ensure_connection():
+            return None
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT value FROM app_state WHERE key = 'last_securebot_alert_ts'")
+            row = cur.fetchone()
+            return float(row[0]) if row else None
+
+    def set_last_securebot_alert_ts(self, ts: float):
+        if not self._ensure_connection():
+            return
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO app_state (key, value) VALUES ('last_securebot_alert_ts', %s) "
+                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+                (str(ts),)
+            )
+
     def save(self, user_input: str, response: str):
         if not self._ensure_connection():
             return
