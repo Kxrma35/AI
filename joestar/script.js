@@ -1,6 +1,16 @@
 import { initOrb } from './orb-render.js';
 import { auth } from './firebase-config.js';
-import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js';
+import { onAuthStateChanged, signOut, deleteUser } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js';
+
+// ── CONNECTION STATUS (real, not decorative) ──
+function setStatus(label) {
+  for (const id of ['conn-status', 'backend-state']) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = label;
+  }
+  const mobile = document.getElementById('mobile-log');
+  if (mobile && label !== 'ONLINE') mobile.textContent = label;
+}
 
 // ── AUTH ──
 let ws;
@@ -9,9 +19,16 @@ const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 function connectWebSocket(token) {
   ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`);
 
-  ws.onopen = () => addLog('JOESTAR ONLINE — Connected to backend', true);
+  ws.onopen = () => {
+    setStatus('ONLINE');
+    updateMobileLog('ONLINE — AWAITING COMMAND');
+    addLog('Connected to backend', true);
+  };
+
+  ws.onclose = () => setStatus('OFFLINE');
 
   ws.onerror = () => {
+    setStatus('OFFLINE');
     addLog('ERROR: Could not connect to backend');
     document.getElementById('response-text').textContent = 'Cannot connect to backend. Is the server running?';
   };
@@ -93,7 +110,9 @@ async function fetchHistory(offset) {
   const user = auth.currentUser;
   if (!user) return;
   const token = await user.getIdToken();
-  const res = await fetch(`/history?token=${encodeURIComponent(token)}&limit=${HISTORY_PAGE_SIZE}&offset=${offset}`);
+  const res = await fetch(`/history?limit=${HISTORY_PAGE_SIZE}&offset=${offset}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!res.ok) {
     historyList.innerHTML = '<div class="history-empty">Could not load history.</div>';
     return;
@@ -105,17 +124,123 @@ async function fetchHistory(offset) {
   historyLoadMoreBtn.style.display = historyOffset < historyTotal ? 'block' : 'none';
 }
 
-document.getElementById('history-btn')?.addEventListener('click', () => {
-  historyOverlay.classList.add('visible');
+// ── ACCESSIBLE MODALS (focus moved in, trapped, Esc to close, focus restored) ──
+let activeModal = null;
+const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function openModal(overlay, opener) {
+  overlay.classList.add('visible');
+  activeModal = { overlay, opener };
+  const first = overlay.querySelector(FOCUSABLE);
+  if (first) first.focus();
+}
+
+function closeModal() {
+  if (!activeModal) return;
+  const { overlay, opener } = activeModal;
+  overlay.classList.remove('visible');
+  activeModal = null;
+  opener?.focus();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (!activeModal) return;
+  if (e.key === 'Escape') { e.preventDefault(); closeModal(); return; }
+  if (e.key !== 'Tab') return;
+  const items = [...activeModal.overlay.querySelectorAll(FOCUSABLE)].filter(el => el.offsetParent !== null);
+  if (!items.length) return;
+  const firstEl = items[0], lastEl = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === firstEl) { e.preventDefault(); lastEl.focus(); }
+  else if (!e.shiftKey && document.activeElement === lastEl) { e.preventDefault(); firstEl.focus(); }
+});
+
+document.getElementById('history-btn')?.addEventListener('click', (e) => {
+  openModal(historyOverlay, e.currentTarget);
   fetchHistory(0);
 });
 
-document.getElementById('history-close')?.addEventListener('click', () => {
-  historyOverlay.classList.remove('visible');
-});
+document.getElementById('history-close')?.addEventListener('click', closeModal);
 
 historyOverlay?.addEventListener('click', (e) => {
-  if (e.target === historyOverlay) historyOverlay.classList.remove('visible');
+  if (e.target === historyOverlay) closeModal();
+});
+
+// ── PRIVACY / DATA DELETION ──
+const privacyOverlay = document.getElementById('privacy-overlay');
+const privacyStatus = document.getElementById('privacy-status');
+const deleteDataBtn = document.getElementById('delete-data-btn');
+const deleteAccountBtn = document.getElementById('delete-account-btn');
+const DELETE_DATA_LABEL = deleteDataBtn.textContent;
+const DELETE_ACCOUNT_LABEL = deleteAccountBtn.textContent;
+
+function resetPrivacyButtons() {
+  deleteDataBtn.textContent = DELETE_DATA_LABEL;
+  deleteAccountBtn.textContent = DELETE_ACCOUNT_LABEL;
+  deleteDataBtn.dataset.armed = deleteAccountBtn.dataset.armed = '';
+}
+
+document.getElementById('privacy-btn')?.addEventListener('click', (e) => {
+  privacyStatus.textContent = '';
+  resetPrivacyButtons();
+  openModal(privacyOverlay, e.currentTarget);
+});
+document.getElementById('privacy-close')?.addEventListener('click', closeModal);
+privacyOverlay?.addEventListener('click', (e) => { if (e.target === privacyOverlay) closeModal(); });
+
+async function deleteConversations() {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not signed in.');
+  const token = await user.getIdToken(true);
+  const res = await fetch('/account/data', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    let detail = 'Request failed.';
+    try { detail = (await res.json()).detail || detail; } catch { /* keep default */ }
+    throw new Error(detail);
+  }
+  return (await res.json()).conversations_deleted;
+}
+
+// Two-step confirm (first click arms, second click performs) — no blocking browser dialogs.
+function armOrRun(btn, armedText, action) {
+  btn.addEventListener('click', async () => {
+    if (btn.dataset.armed !== '1') {
+      resetPrivacyButtons();
+      btn.dataset.armed = '1';
+      btn.textContent = armedText;
+      privacyStatus.textContent = 'Press the button again to confirm. This cannot be undone.';
+      return;
+    }
+    resetPrivacyButtons();
+    btn.disabled = true;
+    try {
+      await action();
+    } catch (err) {
+      privacyStatus.textContent = `Error: ${err.message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+armOrRun(deleteDataBtn, 'CONFIRM: DELETE ALL MY CONVERSATIONS', async () => {
+  const n = await deleteConversations();
+  historyList.innerHTML = '';
+  privacyStatus.textContent = `Deleted ${n} conversation${n === 1 ? '' : 's'}.`;
+  addLog('Your stored conversations were deleted', true);
+});
+
+armOrRun(deleteAccountBtn, 'CONFIRM: DELETE ACCOUNT AND ALL DATA', async () => {
+  await deleteConversations();
+  try {
+    await deleteUser(auth.currentUser);
+  } catch (err) {
+    if (err.code === 'auth/requires-recent-login') {
+      privacyStatus.textContent = 'Your conversations were deleted. To finish deleting your account, sign out, sign in again, then retry (a recent sign-in is required).';
+      return;
+    }
+    throw err;
+  }
+  window.location.href = '/login.html';
 });
 
 historyLoadMoreBtn?.addEventListener('click', () => fetchHistory(historyOffset));
@@ -198,6 +323,7 @@ const micBtn = document.getElementById('mic-btn');
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 if (SpeechRecognition) {
+  document.getElementById('voice-state').textContent = 'AVAILABLE';
   const recognition = new SpeechRecognition();
   recognition.continuous = false;
   recognition.lang = 'en-US';
@@ -230,10 +356,12 @@ if (SpeechRecognition) {
   micBtn.addEventListener('click', () => recognition.start());
 
 } else {
-  micBtn.style.opacity = '0.4';
-  micBtn.title = 'Voice requires Chrome';
+  document.getElementById('voice-state').textContent = 'UNSUPPORTED';
+  micBtn.setAttribute('aria-disabled', 'true');
+  micBtn.style.opacity = '0.6';
+  micBtn.title = 'Voice input is not supported in this browser';
   micBtn.addEventListener('click', () => {
-    addLog('ERROR: Voice not supported — use Chrome');
+    addLog('Voice input is not supported in this browser — you can type instead');
   });
 }
 
@@ -260,9 +388,10 @@ async function doWebSearch(query) {
   document.getElementById('response-text').textContent = 'Searching the web...';
 
   try {
+    const token = await auth.currentUser?.getIdToken();
     const res = await fetch('/search', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ query })
     });
     const data = await res.json();
@@ -329,9 +458,5 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── BOOT LOG ──
-addLog('Neural core initialized');
-addLog('Memory systems loading...');
-addLog('Tools ready: web search, files, calendar, voice');
-addLog('Voice output active — Press Alt+M to toggle sound');
-addLog('Awaiting your command, Sir...');
-updateMobileLog('SYSTEMS ONLINE — AWAITING COMMAND');
+addLog('Connecting to backend...');
+addLog('Press Alt+M to toggle spoken replies');

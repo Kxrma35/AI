@@ -47,6 +47,17 @@ function friendlyError(err) {
   return err.message || "Something went wrong. Please try again.";
 }
 
+const consentBox = document.getElementById("consent-terms");
+const consentHint = document.getElementById("consent-hint");
+
+// Account creation (email or Google) requires an explicit, unticked-by-default opt-in.
+function consentGiven() {
+  if (consentBox.checked) return true;
+  showError("Please confirm you are 18 or older and agree to the Terms of Service and Privacy Policy.");
+  consentBox.focus();
+  return false;
+}
+
 function goToApp() {
   window.location.href = "/";
 }
@@ -61,6 +72,8 @@ tabSignin.addEventListener("click", () => {
   clearError();
   tabSignin.classList.add("active");
   tabSignup.classList.remove("active");
+  tabSignin.setAttribute("aria-selected", "true");
+  tabSignup.setAttribute("aria-selected", "false");
   formSignin.style.display = "flex";
   formSignup.style.display = "none";
 });
@@ -69,6 +82,8 @@ tabSignup.addEventListener("click", () => {
   clearError();
   tabSignup.classList.add("active");
   tabSignin.classList.remove("active");
+  tabSignup.setAttribute("aria-selected", "true");
+  tabSignin.setAttribute("aria-selected", "false");
   formSignup.style.display = "flex";
   formSignin.style.display = "none";
 });
@@ -93,6 +108,7 @@ formSignin.addEventListener("submit", async (e) => {
 formSignup.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearError();
+  if (!consentGiven()) return;
   const name = document.getElementById("signup-name").value.trim();
   const email = document.getElementById("signup-email").value;
   const password = document.getElementById("signup-password").value;
@@ -111,6 +127,7 @@ formSignup.addEventListener("submit", async (e) => {
 // ── GOOGLE SIGN-IN ──
 document.getElementById("google-btn").addEventListener("click", async () => {
   clearError();
+  if (!consentGiven()) return;
   try {
     await signInWithPopup(auth, new GoogleAuthProvider());
     goToApp();

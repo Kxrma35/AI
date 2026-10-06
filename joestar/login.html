@@ -8,20 +8,21 @@
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+        "three": "/vendor/three.module.js"
       }
     }
   </script>
 </head>
 <body>
+<a class="skip-link" href="#signin-email">Skip to the sign-in form</a>
 
-<div class="corner corner-tl"></div>
-<div class="corner corner-tr"></div>
-<div class="corner corner-bl"></div>
-<div class="corner corner-br"></div>
+<div class="corner corner-tl" aria-hidden="true"></div>
+<div class="corner corner-tr" aria-hidden="true"></div>
+<div class="corner corner-bl" aria-hidden="true"></div>
+<div class="corner corner-br" aria-hidden="true"></div>
 
-<div class="auth-shell">
-  <div class="auth-orb-wrap">
+<main class="auth-shell">
+  <div class="auth-orb-wrap" aria-hidden="true">
     <div class="auth-orb-ring"></div>
     <div class="auth-orb-ring"></div>
     <div class="auth-orb-ring"></div>
@@ -29,38 +30,73 @@
   </div>
 
   <div class="auth-panel">
-    <div class="logo" style="text-align:center;margin-bottom:24px">JOESTAR</div>
+    <h1 class="logo" style="text-align:center;margin-bottom:24px">JOESTAR</h1>
 
-    <div class="auth-tabs">
-      <button class="auth-tab active" id="tab-signin">SIGN IN</button>
-      <button class="auth-tab" id="tab-signup">SIGN UP</button>
+    <div class="auth-tabs" role="tablist" aria-label="Sign in or sign up">
+      <button type="button" class="auth-tab active" id="tab-signin" role="tab" aria-selected="true" aria-controls="signin-form">SIGN IN</button>
+      <button type="button" class="auth-tab" id="tab-signup" role="tab" aria-selected="false" aria-controls="signup-form">SIGN UP</button>
     </div>
 
-    <div id="auth-error" class="auth-error"></div>
+    <div id="auth-error" class="auth-error" role="alert"></div>
 
-    <form id="signin-form" class="auth-form">
-      <input class="auth-input" id="signin-email" type="email" placeholder="Email" required autocomplete="email" />
-      <input class="auth-input" id="signin-password" type="password" placeholder="Password" required autocomplete="current-password" />
+    <form id="signin-form" class="auth-form" role="tabpanel" aria-labelledby="tab-signin">
+      <div>
+        <label class="field-label" for="signin-email">EMAIL</label>
+        <input class="auth-input" id="signin-email" type="email" placeholder="you@example.com" required autocomplete="email" />
+      </div>
+      <div>
+        <label class="field-label" for="signin-password">PASSWORD</label>
+        <input class="auth-input" id="signin-password" type="password" placeholder="Your password" required autocomplete="current-password" />
+      </div>
       <button class="auth-submit" type="submit">SIGN IN</button>
     </form>
 
-    <form id="signup-form" class="auth-form" style="display:none">
-      <input class="auth-input" id="signup-name" type="text" placeholder="Your name" required autocomplete="name" />
-      <input class="auth-input" id="signup-email" type="email" placeholder="Email" required autocomplete="email" />
-      <input class="auth-input" id="signup-password" type="password" placeholder="Password (min 6 characters)" required autocomplete="new-password" minlength="6" />
+    <form id="signup-form" class="auth-form" style="display:none" role="tabpanel" aria-labelledby="tab-signup">
+      <div>
+        <label class="field-label" for="signup-name">YOUR NAME</label>
+        <input class="auth-input" id="signup-name" type="text" placeholder="How JOESTAR should address you" required autocomplete="name" />
+      </div>
+      <div>
+        <label class="field-label" for="signup-email">EMAIL</label>
+        <input class="auth-input" id="signup-email" type="email" placeholder="you@example.com" required autocomplete="email" />
+      </div>
+      <div>
+        <label class="field-label" for="signup-password">PASSWORD (MIN 6 CHARACTERS)</label>
+        <input class="auth-input" id="signup-password" type="password" placeholder="Choose a password" required autocomplete="new-password" minlength="6" />
+      </div>
       <button class="auth-submit" type="submit">CREATE ACCOUNT</button>
     </form>
 
     <div class="auth-divider"><span>OR</span></div>
 
-    <button class="auth-google" id="google-btn">
-      <i class="fa-brands fa-google"></i> Continue with Google
+    <button type="button" class="auth-google" id="google-btn">
+      <svg class="icon" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512"><path d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"/></svg> Continue with Google
     </button>
-  </div>
-</div>
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <!-- Unticked by default; required to create an account (email or Google). -->
+    <div class="consent-check" id="consent-wrap" style="margin-top:14px">
+      <input type="checkbox" id="consent-terms" />
+      <label for="consent-terms" id="consent-terms-label">
+        I am at least 18 years old and I agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms of Service</a>
+        and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.
+        <span id="consent-hint">Required to create an account or continue with Google. Not needed to sign in with email.</span>
+      </label>
+    </div>
+  </div>
+</main>
+
+<nav class="legal-links" aria-label="Legal">
+  <a href="/privacy.html">Privacy</a>
+  <a href="/terms.html">Terms</a>
+  <a href="/refund.html">Refunds</a>
+  <a href="/cookies.html">Cookies</a>
+  <a href="/privacy.html#who">Business details</a>
+  <a href="/licenses.html">Licenses</a>
+  <button type="button" class="link-btn" data-cookie-settings>Cookie settings</button>
+</nav>
+
 <script type="module" src="login.js"></script>
+<script type="module" src="consent.js"></script>
 
 </body>
 </html>

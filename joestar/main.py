@@ -4,13 +4,13 @@ from dotenv import load_dotenv
 FRONTEND_DIR = Path(__file__).parent
 load_dotenv(FRONTEND_DIR / ".env")
 
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException, Request, WebSocket
 from starlette.websockets import WebSocketDisconnect, WebSocketState
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from google.auth.transport import requests as google_auth_requests
 from google.oauth2 import id_token as google_id_token
 from brain import Brain
+from memory import current_user_id
 from voice import synthesize_speech
 from tools.web_search import search_web
 import json
@@ -34,12 +34,44 @@ def verify_firebase_token(token: str) -> dict | None:
     except Exception:
         return None
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+# Optional allow-list: comma-separated emails permitted to use JOESTAR (e.g. "me@example.com").
+# JOESTAR can run shell commands and read files on the host, so if sign-up is open to the
+# public you should set this. Unset = any signed-in Firebase user is allowed (previous behaviour).
+ALLOWED_EMAILS = {e.strip().lower() for e in os.getenv("ALLOWED_EMAILS", "").split(",") if e.strip()}
+
+
+def authenticate(token: str | None) -> dict | None:
+    """Verify the token and the optional email allow-list. Returns claims or None."""
+    claims = verify_firebase_token(token)
+    if not claims:
+        return None
+    if ALLOWED_EMAILS and (claims.get("email") or "").lower() not in ALLOWED_EMAILS:
+        return None
+    return claims
+
+
+def bearer_token(request: Request) -> str | None:
+    header = request.headers.get("authorization", "")
+    return header[7:].strip() if header.lower().startswith("bearer ") else None
+
+
+def uid_of(claims: dict) -> str | None:
+    return claims.get("user_id") or claims.get("sub")
+
+
+# No CORS middleware: the frontend is served from this same origin, so cross-origin
+# access (previously allow_origins=["*"]) is neither needed nor wanted.
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    # Microphone is used by in-page speech recognition; everything else is off.
+    response.headers.setdefault("Permissions-Policy", "microphone=(self), camera=(), geolocation=(), payment=()")
+    return response
 
 brain = Brain()
 
@@ -102,14 +134,17 @@ async def reflection_loop(websocket: WebSocket):
 async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
     await websocket.accept()
 
-    claims = await asyncio.to_thread(verify_firebase_token, token)
+    claims = await asyncio.to_thread(authenticate, token)
     if not claims:
         await websocket.send_text(json.dumps({
             "type": "auth_error",
-            "content": "Please sign in again."
+            "content": "Please sign in again, or this account may not be authorised."
         }))
         await websocket.close(code=1008)
         return
+
+    # Scope all memory reads/writes in this connection (and the tasks it spawns) to this user.
+    current_user_id.set(uid_of(claims))
 
     user_name = claims.get("name") or claims.get("email") or "Sir"
     brain.set_user(user_name)
@@ -151,7 +186,9 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
 
 
 @app.post("/search")
-async def search_endpoint(query: dict):
+async def search_endpoint(request: Request, query: dict):
+    if not await asyncio.to_thread(authenticate, bearer_token(request)):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     search_query = query.get("query", "")
     if not search_query:
         return {"error": "No query provided"}
@@ -164,10 +201,11 @@ async def search_endpoint(query: dict):
 
 
 @app.get("/history")
-async def get_history(token: str = None, limit: int = 50, offset: int = 0):
-    claims = await asyncio.to_thread(verify_firebase_token, token)
+async def get_history(request: Request, limit: int = 50, offset: int = 0):
+    claims = await asyncio.to_thread(authenticate, bearer_token(request))
     if not claims:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    current_user_id.set(uid_of(claims))
 
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
@@ -177,6 +215,20 @@ async def get_history(token: str = None, limit: int = 50, offset: int = 0):
         return {"items": items, "total": total, "limit": limit, "offset": offset}
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.delete("/account/data")
+async def delete_my_data(request: Request):
+    """Data-deletion request: erase all stored conversations belonging to the signed-in user."""
+    claims = await asyncio.to_thread(authenticate, bearer_token(request))
+    if not claims:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    current_user_id.set(uid_of(claims))
+    try:
+        deleted = await asyncio.to_thread(brain.memory.delete_user_data)
+    except Exception:
+        raise HTTPException(status_code=503, detail="Could not reach the database. Nothing was deleted; please try again.")
+    return {"status": "deleted", "conversations_deleted": deleted}
 
 
 @app.get("/health")
@@ -193,8 +245,28 @@ async def test_voice():
         return {"status": "error", "detail": str(e)}
 
 
-# Serve frontend — must be last
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+# Serve frontend — must be last.
+# Only an explicit allow-list is public. FRONTEND_DIR also contains .env, *.py, data/ and
+# the venv, which must never be downloadable (a plain StaticFiles(directory=FRONTEND_DIR)
+# served all of them).
+PUBLIC_FILES = {
+    "index.html", "login.html", "privacy.html", "terms.html", "refund.html",
+    "cookies.html", "licenses.html", "style.css", "legal.css", "legal.js",
+    "legal-config.js", "consent.js", "script.js", "login.js", "firebase-config.js",
+    "orb-render.js",
+}
+PUBLIC_PREFIXES = ("vendor/",)
+
+
+class PublicStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        norm = path.strip("/")
+        if norm not in ("", ".") and norm not in PUBLIC_FILES and not norm.startswith(PUBLIC_PREFIXES):
+            raise HTTPException(status_code=404)
+        return await super().get_response(path, scope)
+
+
+app.mount("/", PublicStaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn

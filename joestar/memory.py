@@ -1,4 +1,5 @@
 import os
+from contextvars import ContextVar
 from datetime import datetime
 
 import psycopg2
@@ -6,6 +7,12 @@ from pgvector.psycopg2 import register_vector
 from chromadb.utils import embedding_functions
 
 EMBEDDING_DIM = 384
+
+# Firebase UID of the signed-in user on whose behalf the current request/task runs.
+# Set by main.py after token verification. ContextVars propagate into asyncio tasks
+# and asyncio.to_thread(), so Brain code doesn't need to pass the user through every call.
+# When unset (None) memory is neither read nor written: no data without a known owner.
+current_user_id: ContextVar = ContextVar("current_user_id", default=None)
 
 
 class Memory:
@@ -63,6 +70,10 @@ class Memory:
                     embedding VECTOR({EMBEDDING_DIM})
                 )
             """)
+            # Per-user ownership (added for privacy / data-deletion requests).
+            # Rows saved before this column existed keep user_id NULL and are never shown to any user.
+            cur.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id TEXT")
+            cur.execute("CREATE INDEX IF NOT EXISTS conversations_user_id_idx ON conversations (user_id)")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS app_state (
                     key TEXT PRIMARY KEY,
@@ -107,36 +118,50 @@ class Memory:
             )
 
     def save(self, user_input: str, response: str):
-        if not self._ensure_connection():
+        uid = current_user_id.get()
+        if not uid or not self._ensure_connection():
             return
         embedding = self._embed(f"User: {user_input}\nJOESTAR: {response}")
         with self.conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO conversations (user_input, assistant_response, embedding) VALUES (%s, %s, %s)",
-                (user_input, response, embedding)
+                "INSERT INTO conversations (user_input, assistant_response, embedding, user_id) VALUES (%s, %s, %s, %s)",
+                (user_input, response, embedding, uid)
             )
+
+    def delete_user_data(self) -> int:
+        """Erase every stored conversation belonging to the current user. Returns rows deleted."""
+        uid = current_user_id.get()
+        if not uid:
+            return 0
+        if not self._ensure_connection():
+            raise RuntimeError("Memory database unavailable")
+        with self.conn.cursor() as cur:
+            cur.execute("DELETE FROM conversations WHERE user_id = %s", (uid,))
+            return cur.rowcount
 
     def get_recent(self, n=5) -> list:
         """Get the n most recent exchanges, oldest first."""
-        if not self._ensure_connection():
+        uid = current_user_id.get()
+        if not uid or not self._ensure_connection():
             return []
         with self.conn.cursor() as cur:
             cur.execute(
-                "SELECT user_input, assistant_response FROM conversations ORDER BY id DESC LIMIT %s",
-                (n,)
+                "SELECT user_input, assistant_response FROM conversations WHERE user_id = %s ORDER BY id DESC LIMIT %s",
+                (uid, n)
             )
             rows = cur.fetchall()
         return list(reversed(rows))
 
     def get_history(self, limit=50, offset=0) -> list:
         """Get paginated conversation history, most recent first."""
-        if not self._ensure_connection():
+        uid = current_user_id.get()
+        if not uid or not self._ensure_connection():
             return []
         with self.conn.cursor() as cur:
             cur.execute(
                 "SELECT id, timestamp, user_input, assistant_response FROM conversations "
-                "ORDER BY id DESC LIMIT %s OFFSET %s",
-                (limit, offset)
+                "WHERE user_id = %s ORDER BY id DESC LIMIT %s OFFSET %s",
+                (uid, limit, offset)
             )
             rows = cur.fetchall()
         return [
@@ -150,23 +175,25 @@ class Memory:
         ]
 
     def get_history_count(self) -> int:
-        if not self._ensure_connection():
+        uid = current_user_id.get()
+        if not uid or not self._ensure_connection():
             return 0
         with self.conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM conversations")
+            cur.execute("SELECT COUNT(*) FROM conversations WHERE user_id = %s", (uid,))
             return cur.fetchone()[0]
 
     def retrieve(self, query: str, n=3) -> list:
         """Retrieve semantically relevant past memories."""
         try:
-            if not self._ensure_connection():
+            uid = current_user_id.get()
+            if not uid or not self._ensure_connection():
                 return []
             embedding = self._embed(query)
             with self.conn.cursor() as cur:
                 cur.execute(
                     "SELECT user_input, assistant_response FROM conversations "
-                    "ORDER BY embedding <=> %s LIMIT %s",
-                    (embedding, n)
+                    "WHERE user_id = %s ORDER BY embedding <=> %s LIMIT %s",
+                    (uid, embedding, n)
                 )
                 rows = cur.fetchall()
             if not rows:

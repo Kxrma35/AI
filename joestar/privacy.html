@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>JOESTAR — Privacy Policy</title>
+  <meta name="robots" content="index,follow" />
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="legal.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="legal-page">
+  <header>
+    <div class="logo"><a href="/">JOESTAR</a></div>
+    <nav aria-label="Legal pages" class="meta"><a href="/privacy.html" aria-current="page">Privacy Policy</a> · <a href="/terms.html">Terms of Service</a> · <a href="/refund.html">Refund Policy</a> · <a href="/cookies.html">Cookie Policy</a> · <a href="/licenses.html">Licenses &amp; Credits</a></nav>
+  </header>
+  <main id="main">
+    <h1>Privacy Policy</h1>
+    <p class="meta">Last updated: <span data-updated></span></p>
+
+    <h2 id="who">Who we are</h2>
+    <p>JOESTAR is a personal AI assistant operated by <strong data-biz="name"></strong>
+    (<span data-biz="legalForm"></span>). Registration number: <span data-biz="registrationNumber"></span>.</p>
+    <ul>
+      <li>Address: <span data-biz="address"></span></li>
+      <li>Email: <a data-biz="email"></a></li>
+      <li>Phone: <span data-biz="phone"></span></li>
+    </ul>
+    <p class="notice">Items marked <span class="todo">[to be provided]</span> have not been filled in yet.
+    These details are set in <code>legal-config.js</code>.</p>
+
+    <h2>1. What this policy covers</h2>
+    <p>This policy explains what personal data JOESTAR collects, why, who it is shared with, how long it is kept,
+    and the choices you have. We aim to collect only what the service needs to work.</p>
+
+    <h2>2. Data we collect</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Data</th><th>Why</th><th>Where it is processed</th></tr></thead>
+      <tbody>
+        <tr><td>Account data: email address, display name, password (stored only as a hash by Firebase), or your Google profile name and email if you use Google sign-in</td><td>Create your account and sign you in</td><td>Firebase Authentication (Google LLC)</td></tr>
+        <tr><td>Conversation content: messages you type, or speech you dictate once transcribed by your browser, JOESTAR&rsquo;s replies, timestamps, and a numeric &ldquo;embedding&rdquo; computed from them</td><td>Provide the assistant, remember earlier conversations, show your history</td><td>Supabase (Postgres database)</td></tr>
+        <tr><td>Message text and recent conversation context</td><td>Generate answers</td><td>AI providers: Groq (primary), Google Gemini (backup / second opinion), and optionally a local model on the operator&rsquo;s own machine</td></tr>
+        <tr><td>Text of short replies</td><td>Turn replies into speech</td><td>Microsoft Edge text-to-speech service</td></tr>
+        <tr><td>Search terms, place names for weather</td><td>Only when a request needs them</td><td>Serper (web search), OpenWeather (weather)</td></tr>
+        <tr><td>Technical request data (IP address, user agent, timestamps)</td><td>Operate and secure the service</td><td>Hosting provider (Render) server logs</td></tr>
+        <tr><td>Your consent choice and sign-in session, kept in your browser</td><td>Keep you signed in and remember your cookie choice</td><td>Your device only (see <a href="/cookies.html">Cookie Policy</a>)</td></tr>
+      </tbody>
+    </table></div>
+    <p>We do <strong>not</strong> use advertising or analytics trackers, do not sell personal data, and do not send marketing email.</p>
+
+    <h2>3. Voice input</h2>
+    <p>The microphone button uses your browser&rsquo;s built-in speech recognition. In Chrome and some other browsers, the audio is
+    sent to the browser vendor&rsquo;s servers (for Chrome, Google) to be transcribed. JOESTAR itself only receives the resulting text and
+    never receives or stores the audio. The microphone is only used when you press the button. You can type instead.</p>
+
+    <h2>4. Shared AI memory (important)</h2>
+    <p>JOESTAR stores your conversations so it can recall them later. Each stored conversation is tagged with your account ID, and
+    your history and memory are only shown to you. Conversations stored before account tagging was introduced are not
+    attached to any account.</p>
+
+    <h2>5. Legal bases</h2>
+    <p>Where data protection law requires a legal basis: we process account and conversation data to provide the service you asked for
+    (contract); we process technical logs for security and reliability (legitimate interests); and we rely on your consent for optional
+    storage, if any is ever introduced, and for the age and terms confirmation you give when creating an account.</p>
+
+    <h2>6. Retention</h2>
+    <ul>
+      <li>Account and conversation data are kept until you delete them or ask us to.</li>
+      <li>Server logs are kept by the hosting provider for its standard period.</li>
+      <li>Third parties keep data under their own policies (for example AI providers may retain requests for a limited time for abuse monitoring).</li>
+    </ul>
+
+    <h2>7. Your rights and how to use them</h2>
+    <p>Depending on where you live you may have the right to access, correct, delete, restrict or object to our processing of your
+    personal data, to withdraw consent, and to complain to your data protection authority.</p>
+    <ul>
+      <li><strong>Delete your conversations</strong> or <strong>delete your account and all data</strong> directly in the app: sign in, then use <em>Privacy</em> in the top bar.</li>
+      <li>For access, correction, a copy of your data, or if you cannot sign in, email <a data-biz="email"></a>. We aim to respond within 30 days.</li>
+    </ul>
+
+    <h2>8. Children</h2>
+    <p>JOESTAR is not intended for anyone under 18 and we do not knowingly collect children&rsquo;s data. Creating an account requires confirming that
+    you are at least 18. If you believe a child has provided us data, contact us and we will delete it.</p>
+
+    <h2>9. International transfers</h2>
+    <p>The providers listed above may process data outside your country. Where required, transfers rely on the safeguards those
+    providers offer (such as standard contractual clauses).</p>
+
+    <h2>10. Security</h2>
+    <p>Connections use HTTPS, access to conversations requires a verified sign-in, and secrets are stored outside the public website files.
+    No system is perfectly secure; tell us promptly if you find a problem.</p>
+
+    <h2>11. Changes</h2>
+    <p>We will update this page when our practices change and show the new date above. Material changes will be flagged in the app.</p>
+
+  </main>
+  <footer class="legal-links" style="margin-top:40px">
+    <a href="/">Back to JOESTAR</a>
+    <button type="button" class="link-btn" data-cookie-settings>Cookie settings</button>
+  </footer>
+</div>
+<script type="module" src="legal.js"></script>
+<script type="module" src="consent.js"></script>
+</body>
+</html>
