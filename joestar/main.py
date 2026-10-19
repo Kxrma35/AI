@@ -13,13 +13,16 @@ from brain import Brain
 from memory import current_user_id
 from voice import synthesize_speech
 from tools.web_search import search_web
+import hmac
 import json
 import asyncio
 import os
+from robot_state import hub, speech_seconds
 
 app = FastAPI()
 
 FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID")
+ROBOT_TOKEN = os.getenv("ROBOT_TOKEN", "")
 _google_auth_request = google_auth_requests.Request()
 
 
@@ -92,9 +95,11 @@ async def send_response(websocket: WebSocket, text: str, proactive: bool = False
     payload = {"type": "text", "content": text}
     if proactive:
         payload["proactive"] = True
+        hub.set("alert", hold=speech_seconds(text))
     # Send text immediately so UI updates fast
     await websocket.send_text(json.dumps(payload))
 
+    spoke = False
     if should_speak(text):
         try:
             audio_b64 = await synthesize_speech(text)
@@ -102,8 +107,15 @@ async def send_response(websocket: WebSocket, text: str, proactive: bool = False
                 "type": "audio",
                 "content": audio_b64
             }))
+            spoke = True
         except Exception as e:
             print(f"[Voice] TTS error: {e}")
+
+    if not proactive:
+        if spoke:
+            hub.set("speaking", hold=speech_seconds(text))
+        else:
+            hub.set("idle")
 
 
 async def proactive_loop(websocket: WebSocket):
@@ -172,6 +184,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
             message = json.loads(data)
             user_input = message.get("text", "")
 
+            hub.set("thinking")
             try:
                 response = await brain.think(user_input)
             except Exception as e:
@@ -229,6 +242,25 @@ async def delete_my_data(request: Request):
     except Exception:
         raise HTTPException(status_code=503, detail="Could not reach the database. Nothing was deleted; please try again.")
     return {"status": "deleted", "conversations_deleted": deleted}
+
+
+@app.websocket("/robot/ws")
+async def robot_ws(websocket: WebSocket, token: str | None = None):
+    # Read only feed of JOESTAR's state for the desk robot, never accepts commands
+    await websocket.accept()
+    if not ROBOT_TOKEN or not token or not hmac.compare_digest(token, ROBOT_TOKEN):
+        await websocket.close(code=1008)
+        return
+    queue = hub.subscribe()
+    try:
+        await websocket.send_text(json.dumps({"state": hub.state}))
+        while True:
+            state = await queue.get()
+            await websocket.send_text(json.dumps({"state": state}))
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        hub.unsubscribe(queue)
 
 
 @app.get("/health")
